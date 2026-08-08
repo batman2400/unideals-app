@@ -1,0 +1,143 @@
+/**
+ * useDeals / useDeal
+ *
+ * Port of the web app's `src/lib/useDeals.js`.
+ * - List: `get_public_deals()` (never returns redemption_code)
+ * - Detail: `get_public_deal_by_id()` (code only when caller may see it)
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { supabase, toErrorMessage } from "@/lib/supabase";
+import { mapDeal, type Deal, type PublicDealRow } from "@/types/database";
+
+export interface UseDealsResult {
+  deals: Deal[];
+  isLoading: boolean;
+  isRefreshing: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+export function useDeals(): UseDealsResult {
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const activeRef = useRef(true);
+
+  const load = useCallback(async (isRefresh: boolean): Promise<void> => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+
+    const { data, error: rpcError } = await supabase.rpc("get_public_deals");
+
+    if (!activeRef.current) return;
+
+    if (rpcError) {
+      setError(toErrorMessage(rpcError, "Could not load deals."));
+    } else {
+      const rows = (data ?? []) as PublicDealRow[];
+      setDeals(rows.map(mapDeal));
+    }
+
+    setIsLoading(false);
+    setIsRefreshing(false);
+  }, []);
+
+  useEffect(() => {
+    activeRef.current = true;
+    void load(false);
+
+    return () => {
+      activeRef.current = false;
+    };
+  }, [load]);
+
+  const refresh = useCallback(async () => {
+    await load(true);
+  }, [load]);
+
+  return { deals, isLoading, isRefreshing, error, refresh };
+}
+
+export interface UseDealResult {
+  deal: Deal | null;
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+/**
+ * `accessKey` should change when auth/role/verification changes so the detail
+ * RPC re-runs and can surface `redemption_code` after verification.
+ */
+export function useDeal(
+  id: string | number | undefined,
+  accessKey = "",
+): UseDealResult {
+  const [deal, setDeal] = useState<Deal | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const activeRef = useRef(true);
+
+  const load = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    const parsedId = Number(id);
+    if (!Number.isFinite(parsedId)) {
+      setDeal(null);
+      setError("Invalid deal id.");
+      setIsLoading(false);
+      return;
+    }
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "get_public_deal_by_id",
+      { target_deal_id: parsedId },
+    );
+
+    if (!activeRef.current) return;
+
+    if (rpcError) {
+      setError(toErrorMessage(rpcError, "Could not load this deal."));
+      setDeal(null);
+    } else {
+      const row = (Array.isArray(data) ? data[0] : data) as
+        | PublicDealRow
+        | null
+        | undefined;
+      setDeal(row ? mapDeal(row) : null);
+    }
+
+    setIsLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    activeRef.current = true;
+    void load();
+
+    return () => {
+      activeRef.current = false;
+    };
+  }, [load, accessKey]);
+
+  return { deal, isLoading, error, refresh: load };
+}
+
+/** Case-insensitive match across the fields the web Perks page searches. */
+export function filterDeals(deals: Deal[], query: string): Deal[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return deals;
+
+  return deals.filter((deal) =>
+    [deal.title, deal.brand, deal.category].some((field) =>
+      field?.toLowerCase().includes(normalized),
+    ),
+  );
+}

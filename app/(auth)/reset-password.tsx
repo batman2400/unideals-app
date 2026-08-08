@@ -1,0 +1,208 @@
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { Button } from "@/components/Button";
+import { useAuth } from "@/context/AuthContext";
+import {
+  PASSWORD_HINT,
+  validatePasswordStrength,
+} from "@/lib/passwordPolicy";
+import { supabase, toErrorMessage } from "@/lib/supabase";
+import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
+
+type Status = "checking" | "ready" | "done" | "invalid";
+
+export default function ResetPasswordScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { isAuthenticated, isLoading } = useAuth();
+  const params = useLocalSearchParams<{ error?: string }>();
+
+  const [status, setStatus] = useState<Status>("checking");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(
+    typeof params.error === "string" ? params.error : null,
+  );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (typeof params.error === "string" && params.error) {
+      setStatus("invalid");
+      setError(params.error);
+      return;
+    }
+
+    if (isLoading) return;
+
+    if (isAuthenticated) {
+      setStatus("ready");
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setStatus("invalid");
+      setError(
+        "This reset link is invalid or has expired. Request a new one from the sign-in screen.",
+      );
+    }, 10_000);
+
+    return () => clearTimeout(timeout);
+  }, [isAuthenticated, isLoading, params.error]);
+
+  const handleSubmit = useCallback(async () => {
+    const strengthError = validatePasswordStrength(password);
+    if (strengthError) {
+      setError(strengthError);
+      return;
+    }
+    if (password !== confirm) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password,
+    });
+
+    if (updateError) {
+      setError(toErrorMessage(updateError, "Could not update password."));
+      setIsSubmitting(false);
+      return;
+    }
+
+    await supabase.auth.signOut({ scope: "others" });
+    setStatus("done");
+    setIsSubmitting(false);
+  }, [password, confirm]);
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.flex}
+    >
+      <View
+        style={[
+          styles.content,
+          {
+            paddingTop: insets.top + spacing.xxl,
+            paddingBottom: insets.bottom + spacing.xxl,
+          },
+        ]}
+      >
+        <Text style={styles.title}>Set a new password</Text>
+        <Text style={styles.subtitle}>{PASSWORD_HINT}</Text>
+
+        {status === "checking" ? (
+          <Text style={styles.notice}>Confirming your reset link…</Text>
+        ) : null}
+
+        {status === "invalid" ? (
+          <>
+            <Text style={styles.error}>{error}</Text>
+            <Button label="Back to sign in" onPress={() => router.replace("/login")} />
+          </>
+        ) : null}
+
+        {status === "done" ? (
+          <>
+            <Text style={styles.notice}>
+              Password updated. You can continue using Uni Deals.
+            </Text>
+            <Button label="Go to deals" onPress={() => router.replace("/")} />
+          </>
+        ) : null}
+
+        {status === "ready" ? (
+          <View style={styles.form}>
+            <TextInput
+              style={styles.input}
+              placeholder="New password"
+              placeholderTextColor={colors.inverseOnSurface}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              autoCapitalize="none"
+              textContentType="newPassword"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm password"
+              placeholderTextColor={colors.inverseOnSurface}
+              secureTextEntry
+              value={confirm}
+              onChangeText={setConfirm}
+              autoCapitalize="none"
+              textContentType="newPassword"
+            />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Button
+              label="Update password"
+              loading={isSubmitting}
+              onPress={() => void handleSubmit()}
+            />
+          </View>
+        ) : null}
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xl,
+    gap: spacing.lg,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    color: colors.onBackground,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.onSurfaceVariant,
+  },
+  form: {
+    gap: spacing.md,
+  },
+  input: {
+    minHeight: MIN_TAP_TARGET + 6,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceContainerLowest,
+    fontSize: 15,
+    color: colors.onSurface,
+  },
+  error: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.error,
+  },
+  notice: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.primary,
+  },
+});

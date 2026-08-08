@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "Uni Deals",
+    "slug": "unideals-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "unideals",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "backgroundColor": "#fcf9f8",
+    "primaryColor": "#29695b",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "co.unideals.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Uni Deals uses the camera so partner staff can scan student redemption QR codes at the register."
+      }
+    },
+    "android": {
+      "package": "co.unideals.app",
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#fcf9f8",
+          "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Uni Deals uses the camera so partner staff can scan student redemption QR codes at the register.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Uni Deals needs photo access so students can upload ID proof for verification."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {}
+    }
+  }
+}
