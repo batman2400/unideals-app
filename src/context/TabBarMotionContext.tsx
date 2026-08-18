@@ -11,6 +11,7 @@ import {
 import { Dimensions } from "react-native";
 import {
   Easing,
+  runOnJS,
   useAnimatedScrollHandler,
   useSharedValue,
   withTiming,
@@ -56,7 +57,6 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const closingRef = useRef(false);
-  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const collapsed = useSharedValue(0);
   const collapseTarget = useSharedValue(0);
@@ -98,16 +98,11 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
         1,
         { duration: SEARCH_MORPH_MS, easing: morphEasing },
         (finished) => {
-          if (finished) {
-            searchFieldVisibleSv.value = 1;
-          }
+          if (!finished) return;
+          searchFieldVisibleSv.value = 1;
+          runOnJS(setSearchFieldVisible)(true);
         },
       );
-      if (openTimerRef.current) clearTimeout(openTimerRef.current);
-      openTimerRef.current = setTimeout(() => {
-        setSearchFieldVisible(true);
-        openTimerRef.current = null;
-      }, SEARCH_MORPH_MS);
 
       if (options?.scope && options.scope !== "all") {
         router.push({
@@ -135,10 +130,6 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
     (onFinished: () => void) => {
       if (closingRef.current) return;
       closingRef.current = true;
-      if (openTimerRef.current) {
-        clearTimeout(openTimerRef.current);
-        openTimerRef.current = null;
-      }
       searchFieldVisibleSv.value = 0;
       setSearchFieldVisible(false);
 
@@ -153,12 +144,11 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
           0,
           { duration: SEARCH_MORPH_MS, easing: morphEasing },
           (finished) => {
-            if (finished) {
-              chipHidden.value = 0;
-            }
+            if (!finished) return;
+            chipHidden.value = 0;
+            runOnJS(finish)();
           },
         );
-        setTimeout(finish, SEARCH_MORPH_MS);
       });
     },
     [chipHidden, morphProgress, searchFieldVisibleSv],
