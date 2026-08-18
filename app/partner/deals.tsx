@@ -25,14 +25,13 @@ import { usePartnerBrand } from "@/lib/usePartnerBrand";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import type { PartnerDeal } from "@/types/database";
 
-type FilterValue = "all" | "active" | "scheduled" | "expired" | "pending";
+type FilterValue = "all" | "active" | "scheduled" | "pending";
 
 const FILTERS: readonly { value: FilterValue; label: string }[] = [
   { value: "all", label: "All" },
   { value: "pending", label: "Pending" },
   { value: "active", label: "Active" },
   { value: "scheduled", label: "Scheduled" },
-  { value: "expired", label: "Expired" },
 ];
 
 function statusBadgeColors(lifecycle: PartnerDealLifecycle): {
@@ -88,7 +87,7 @@ function PartnerDealCard({
         )}
         <View style={[styles.badge, { backgroundColor: badge.backgroundColor }]}>
           <Text style={[styles.badgeText, { color: badge.color }]}>
-            {lifecycle}
+            {lifecycle === "expired" ? "finished" : lifecycle}
           </Text>
         </View>
         <View style={styles.typePill}>
@@ -139,7 +138,11 @@ function PartnerDealCard({
   );
 }
 
-export default function PartnerDealsScreen() {
+export function PartnerDealsView({
+  finishedOnly = false,
+}: {
+  finishedOnly?: boolean;
+}) {
   const router = useRouter();
   const { user } = useAuth();
   const [filter, setFilter] = useState<FilterValue>("all");
@@ -163,11 +166,20 @@ export default function PartnerDealsScreen() {
   } = usePartnerDeals(brandId, user?.id);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return deals;
+    if (finishedOnly) {
+      return deals.filter(
+        (deal) => getPartnerDealLifecycle(deal) === "expired",
+      );
+    }
+    if (filter === "all") {
+      return deals.filter(
+        (deal) => getPartnerDealLifecycle(deal) !== "expired",
+      );
+    }
     return deals.filter(
       (deal) => getPartnerDealLifecycle(deal) === filter,
     );
-  }, [deals, filter]);
+  }, [deals, filter, finishedOnly]);
 
   const filterOptions = useMemo(
     () =>
@@ -175,14 +187,12 @@ export default function PartnerDealsScreen() {
         ...item,
         count:
           item.value === "all"
-            ? metrics.total
+            ? metrics.total - metrics.expired
             : item.value === "pending"
               ? metrics.pending
               : item.value === "active"
                 ? metrics.active
-                : item.value === "scheduled"
-                  ? metrics.scheduled
-                  : metrics.expired,
+                : metrics.scheduled,
       })),
     [metrics],
   );
@@ -221,10 +231,13 @@ export default function PartnerDealsScreen() {
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.subhead}>
-            {metrics.total} deal{metrics.total === 1 ? "" : "s"}
+            {finishedOnly
+              ? `${metrics.expired} finished deal${metrics.expired === 1 ? "" : "s"}`
+              : `${metrics.total - metrics.expired} deal${metrics.total - metrics.expired === 1 ? "" : "s"}`}
             {brandName ? ` for ${brandName}` : ""}
           </Text>
         </View>
+        {finishedOnly ? null : (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Create deal"
@@ -236,6 +249,7 @@ export default function PartnerDealsScreen() {
         >
           <Plus color={colors.onPrimary} size={20} />
         </Pressable>
+        )}
       </View>
 
       {(error || brandError) && (
@@ -244,11 +258,13 @@ export default function PartnerDealsScreen() {
         </View>
       )}
 
+      {finishedOnly ? null : (
       <SegmentedControl
         options={filterOptions}
         value={filter}
         onChange={setFilter}
       />
+      )}
 
       {loading && deals.length === 0 ? (
         <View style={styles.centered}>
@@ -269,15 +285,19 @@ export default function PartnerDealsScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Package color={colors.onSurfaceVariant} size={40} />
-              <Text style={styles.emptyTitle}>No deals found</Text>
-              <Text style={styles.emptyBody}>
-                {filter === "all"
-                  ? "Create your first deal to get started."
-                  : filter === "pending"
-                    ? "New deals are published automatically, so this list is usually empty."
-                    : "No deals with this status."}
+              <Text style={styles.emptyTitle}>
+                {finishedOnly ? "No finished deals" : "No deals found"}
               </Text>
-              {filter === "all" ? (
+              <Text style={styles.emptyBody}>
+                {finishedOnly
+                  ? "Ended offers appear here once their end date passes."
+                  : filter === "all"
+                    ? "Create your first deal to get started."
+                    : filter === "pending"
+                      ? "New deals are published automatically, so this list is usually empty."
+                      : "No deals with this status."}
+              </Text>
+              {!finishedOnly && filter === "all" ? (
                 <Button
                   label="Create Deal"
                   onPress={() => router.push("/create-deal" as Href)}
@@ -299,6 +319,10 @@ export default function PartnerDealsScreen() {
       )}
     </View>
   );
+}
+
+export default function PartnerDealsScreen() {
+  return <PartnerDealsView />;
 }
 
 const styles = StyleSheet.create({

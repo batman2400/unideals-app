@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { isFinishedEvent } from "@/lib/eventTiming";
 import { mapEvent, type CampusEvent, type EventRow } from "@/types/database";
 
 export interface UseEventsResult {
@@ -44,7 +45,11 @@ export function useEvents(): UseEventsResult {
     if (fetchError) {
       setError(toErrorMessage(fetchError, "Could not load events."));
     } else {
-      setEvents(((data ?? []) as EventRow[]).map(mapEvent));
+      setEvents(
+        ((data ?? []) as EventRow[])
+          .map(mapEvent)
+          .filter((event) => !isFinishedEvent(event)),
+      );
     }
 
     setIsLoading(false);

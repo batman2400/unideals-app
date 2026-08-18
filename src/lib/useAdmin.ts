@@ -488,7 +488,11 @@ export function useAdminDeals(
         });
       });
 
-      if (statusFilter !== "all") {
+      if (statusFilter === "all") {
+        processed = processed.filter(
+          (deal) => getAdminDealLifecycle(deal) !== "expired",
+        );
+      } else {
         processed = processed.filter(
           (deal) => getAdminDealLifecycle(deal) === statusFilter,
         );

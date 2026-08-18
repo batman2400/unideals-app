@@ -1,25 +1,30 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Plus, Search } from "lucide-react-native";
+import { Plus } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import {
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
 import { EventCard } from "@/components/EventCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { SearchEntryRow } from "@/components/SearchEntryRow";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import {
+  useTabBarCollapseScrollHandler,
+  useTabBarMotion,
+} from "@/context/TabBarMotionContext";
 import { partitionEvents, splitLiveEvents } from "@/lib/eventTiming";
 import { asScheduleParam } from "@/lib/routeParams";
-import { filterEvents, useEvents } from "@/lib/useEvents";
+import { useEvents } from "@/lib/useEvents";
+import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import { EVENT_CATEGORY_OPTIONS } from "@/types/database";
 
@@ -39,7 +44,8 @@ export default function EventsScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ schedule?: string | string[] }>();
   const { events, isLoading, isRefreshing, error, refresh } = useEvents();
-  const [query, setQuery] = useState("");
+  const { openSearch } = useTabBarMotion();
+  const onScroll = useTabBarCollapseScrollHandler();
   const [activeCategory, setActiveCategory] = useState("All");
   const [scheduleTab, setScheduleTab] = useState<ScheduleTab>("all");
 
@@ -66,10 +72,9 @@ export default function EventsScreen() {
         : scheduleTab === "live"
           ? current
           : [...current, ...comingSoon];
-    const searched = filterEvents(pool, query);
-    if (activeCategory === "All") return searched;
-    return searched.filter((event) => event.category === activeCategory);
-  }, [current, comingSoon, scheduleTab, query, activeCategory]);
+    if (activeCategory === "All") return pool;
+    return pool.filter((event) => event.category === activeCategory);
+  }, [current, comingSoon, scheduleTab, activeCategory]);
 
   const visibleTotal = current.length + comingSoon.length;
 
@@ -92,19 +97,10 @@ export default function EventsScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.searchField}>
-          <Search color={colors.onSurfaceVariant} size={18} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search events, universities, categories"
-            placeholderTextColor={colors.inverseOnSurface}
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-        </View>
+        <SearchEntryRow
+          placeholder="Search events, universities, categories"
+          onPress={(layout) => openSearch(layout, { scope: "events" })}
+        />
 
         <View style={styles.scheduleWrap}>
           <SegmentedControl
@@ -151,10 +147,15 @@ export default function EventsScreen() {
       {isLoading ? (
         <ListSkeleton count={4} />
       ) : (
-        <FlatList
+        <Animated.FlatList
           data={filteredEvents}
           keyExtractor={(event) => event.id}
-          contentContainerStyle={styles.listContent}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: floatingTabBarScrollPadding(insets.bottom) },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -195,7 +196,7 @@ export default function EventsScreen() {
                     ? "Scheduled listings will appear here until their go-live date."
                     : visibleTotal === 0
                       ? "We are partnering with university societies to bring campus events here. Check back soon, or submit one yourself."
-                      : "Try a different search term or switch the category back to All."}
+                      : "Try a different category or switch back to All."}
               </Text>
               {error ? (
                 <Button label="Retry" onPress={() => void refresh()} />
@@ -247,24 +248,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.onPrimary,
   },
-  searchField: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    height: 42,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-    backgroundColor: colors.surfaceContainerLowest,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.onSurface,
-    paddingVertical: 0,
-  },
   scheduleWrap: {
     paddingHorizontal: spacing.lg,
   },
@@ -293,7 +276,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
     gap: spacing.md,
   },
   errorBlock: {

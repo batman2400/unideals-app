@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { CalendarDays, Search, Trash2 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,9 +13,19 @@ import {
   View,
 } from "react-native";
 
+import { isComingSoonEvent, isFinishedEvent } from "@/lib/eventTiming";
 import { useAdminEvents } from "@/lib/useAdmin";
 import { colors, radius, spacing } from "@/theme";
 import type { CampusEvent } from "@/types/database";
+
+function eventBucket(
+  event: CampusEvent,
+): "coming_soon" | "finished" | "live" | "other" {
+  if (isComingSoonEvent(event)) return "coming_soon";
+  if (isFinishedEvent(event)) return "finished";
+  if (event.status === "approved") return "live";
+  return "other";
+}
 
 function formatWhen(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -28,13 +38,9 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 function displayStatus(event: CampusEvent): string {
-  if (
-    event.status === "approved" &&
-    event.publishAt &&
-    new Date(event.publishAt) > new Date()
-  ) {
-    return "coming soon";
-  }
+  const bucket = eventBucket(event);
+  if (bucket === "coming_soon") return "coming soon";
+  if (bucket === "finished") return "finished";
   return event.status;
 }
 
@@ -50,6 +56,11 @@ function statusBadgeColors(status: string): {
       };
     case "coming soon":
       return { backgroundColor: "#e0f2fe", color: "#0369a1" };
+    case "finished":
+      return {
+        backgroundColor: colors.surfaceContainerHigh,
+        color: colors.onSurface,
+      };
     case "rejected":
       return { backgroundColor: "#fee2e2", color: "#b91c1c" };
     case "pending":
@@ -147,7 +158,11 @@ function EventCard({
   );
 }
 
-export default function AdminEventsScreen() {
+export function AdminEventsView({
+  finishedOnly = false,
+}: {
+  finishedOnly?: boolean;
+}) {
   const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -167,10 +182,17 @@ export default function AdminEventsScreen() {
     deleteEvent,
   } = useAdminEvents(searchQuery);
 
+  const filteredEvents = useMemo(() => {
+    if (finishedOnly) {
+      return events.filter((event) => eventBucket(event) === "finished");
+    }
+    return events.filter((event) => eventBucket(event) !== "finished");
+  }, [events, finishedOnly]);
+
   return (
     <View style={styles.root}>
       <FlatList
-        data={events}
+        data={filteredEvents}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         refreshControl={
@@ -183,7 +205,9 @@ export default function AdminEventsScreen() {
         ListHeaderComponent={
           <View style={styles.headerBlock}>
             <Text style={styles.subtitle}>
-              Full event catalogue with search and deletion.
+              {finishedOnly
+                ? "Past events are hidden from students. Delete them here if they should be removed."
+                : "Full event catalogue with search and deletion. Finished events live in Finished Events."}
             </Text>
             {message ? (
               <View style={styles.successBox}>
@@ -216,7 +240,11 @@ export default function AdminEventsScreen() {
             </View>
           ) : (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyBody}>No events found.</Text>
+              <Text style={styles.emptyBody}>
+                {finishedOnly
+                  ? "No finished events."
+                  : "No events found."}
+              </Text>
             </View>
           )
         }
@@ -245,6 +273,10 @@ export default function AdminEventsScreen() {
       />
     </View>
   );
+}
+
+export default function AdminEventsScreen() {
+  return <AdminEventsView />;
 }
 
 const styles = StyleSheet.create({

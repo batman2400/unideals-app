@@ -5,10 +5,15 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from "react-native-safe-area-context";
 
 import { ConfigMissingScreen } from "@/components/ConfigMissingScreen";
+import { SearchMorph } from "@/components/SearchMorph";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { TabBarMotionProvider } from "@/context/TabBarMotionContext";
 import { handleAuthDeepLink } from "@/lib/authDeepLink";
 import { qrPayloadKind } from "@/lib/routeParams";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -106,6 +111,14 @@ function NavigationGuard() {
       <Stack.Protected guard={isAuthenticated && !isPasswordRecovery}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
+          name="search"
+          options={{
+            headerShown: false,
+            animation: "fade",
+            contentStyle: styles.content,
+          }}
+        />
+        <Stack.Screen
           name="deal/[id]"
           options={{
             headerShown: true,
@@ -165,6 +178,10 @@ function NavigationGuard() {
             options={{ ...stackHeader, title: "My Deals" }}
           />
           <Stack.Screen
+            name="partner/finished-deals"
+            options={{ ...stackHeader, title: "Finished Deals" }}
+          />
+          <Stack.Screen
             name="partner/scanner"
             options={{ ...stackHeader, title: "Scanner" }}
           />
@@ -213,8 +230,16 @@ function NavigationGuard() {
             options={{ ...stackHeader, title: "All Deals" }}
           />
           <Stack.Screen
+            name="admin/finished-deals"
+            options={{ ...stackHeader, title: "Finished Deals" }}
+          />
+          <Stack.Screen
             name="admin/events"
             options={{ ...stackHeader, title: "All Events" }}
+          />
+          <Stack.Screen
+            name="admin/finished-events"
+            options={{ ...stackHeader, title: "Finished Events" }}
           />
           <Stack.Screen
             name="admin/blog"
@@ -246,7 +271,7 @@ function NavigationGuard() {
 export default function RootLayout() {
   if (!isSupabaseConfigured) {
     return (
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <StatusBar style="dark" />
         <ConfigMissingScreen />
       </SafeAreaProvider>
@@ -255,10 +280,15 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <AuthProvider>
-          <StatusBar style="dark" />
-          <NavigationGuard />
+          <TabBarMotionProvider>
+            <StatusBar style="dark" />
+            <View style={styles.root}>
+              <NavigationGuard />
+              <SearchMorph />
+            </View>
+          </TabBarMotionProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

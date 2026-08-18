@@ -3,10 +3,13 @@
  *
  * Port of the web app's `src/lib/useDeals.js`.
  * - List: `get_public_deals()` (never returns redemption_code)
+ * - Ended offers are dropped from student lists; partners/admins see them
+ *   under Finished in their portals.
  * - Detail: `get_public_deal_by_id()` (code only when caller may see it)
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { isExpiredDeal } from "@/lib/eventTiming";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { mapDeal, type Deal, type PublicDealRow } from "@/types/database";
 
@@ -42,7 +45,7 @@ export function useDeals(): UseDealsResult {
       setError(toErrorMessage(rpcError, "Could not load deals."));
     } else {
       const rows = (data ?? []) as PublicDealRow[];
-      setDeals(rows.map(mapDeal));
+      setDeals(rows.map(mapDeal).filter((deal) => !isExpiredDeal(deal)));
     }
 
     setIsLoading(false);

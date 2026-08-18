@@ -17,6 +17,25 @@ export function isExpiredDeal(deal: Pick<Deal, "endTime">): boolean {
   return !Number.isNaN(t.getTime()) && t.getTime() < Date.now();
 }
 
+/** Past campus events — same cutoff as the student Events tab. */
+export function isFinishedEvent(
+  event: Pick<CampusEvent, "startTime" | "endTime">,
+  now = new Date(),
+): boolean {
+  const startTime = new Date(event.startTime);
+  if (Number.isNaN(startTime.getTime())) return false;
+
+  const endTime = event.endTime ? new Date(event.endTime) : null;
+  const isUpcoming = startTime > now;
+  const isOngoing = Boolean(
+    endTime && !Number.isNaN(endTime.getTime()) && endTime > now,
+  );
+  const isRecentNoEnd =
+    !endTime && now.getTime() - startTime.getTime() < 24 * 60 * 60 * 1000;
+
+  return !(isUpcoming || isOngoing || isRecentNoEnd);
+}
+
 export function isComingSoonEvent(event: CampusEvent): boolean {
   if (!event.publishAt) return false;
   const t = new Date(event.publishAt);
@@ -91,6 +110,7 @@ export function partitionDeals(deals: Deal[]): {
   const live: Deal[] = [];
   const comingSoon: Deal[] = [];
   for (const deal of deals) {
+    if (isExpiredDeal(deal)) continue;
     if (isComingSoonDeal(deal)) comingSoon.push(deal);
     else live.push(deal);
   }
@@ -124,19 +144,8 @@ export function splitLiveEvents(liveEvents: CampusEvent[]): {
   const past: CampusEvent[] = [];
 
   for (const event of liveEvents) {
-    const startTime = new Date(event.startTime);
-    const endTime = event.endTime ? new Date(event.endTime) : null;
-
-    const isUpcoming = startTime > now;
-    const isOngoing = Boolean(endTime && endTime > now);
-    const isRecentNoEnd =
-      !endTime && now.getTime() - startTime.getTime() < 24 * 60 * 60 * 1000;
-
-    if (isUpcoming || isOngoing || isRecentNoEnd) {
-      active.push(event);
-    } else {
-      past.push(event);
-    }
+    if (isFinishedEvent(event, now)) past.push(event);
+    else active.push(event);
   }
 
   active.sort(

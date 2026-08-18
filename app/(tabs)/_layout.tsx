@@ -1,19 +1,17 @@
 import { Tabs } from "expo-router";
-import { CalendarDays, Home, Sparkles, UserRound } from "lucide-react-native";
-import { Platform, StyleSheet } from "react-native";
+import { CalendarDays, Home, Tag, UserRound } from "lucide-react-native";
+import { StyleSheet } from "react-native";
 
+import { FloatingTabBar } from "@/components/FloatingTabBar";
 import { colors } from "@/theme";
 
 export default function TabsLayout() {
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.onSurfaceVariant,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarItemStyle: styles.tabBarItem,
+        tabBarHideOnKeyboard: true,
         sceneStyle: styles.scene,
       }}
     >
@@ -28,9 +26,7 @@ export default function TabsLayout() {
         name="deals"
         options={{
           title: "Deals",
-          tabBarIcon: ({ color, size }) => (
-            <Sparkles color={color} size={size} />
-          ),
+          tabBarIcon: ({ color, size }) => <Tag color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -56,20 +52,6 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: colors.surfaceContainerLowest,
-    borderTopColor: colors.surfaceVariant,
-    borderTopWidth: 1,
-    height: Platform.OS === "ios" ? 88 : 64,
-    paddingTop: 6,
-  },
-  tabBarItem: {
-    paddingVertical: 4,
-  },
-  tabBarLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
   scene: {
     backgroundColor: colors.background,
   },

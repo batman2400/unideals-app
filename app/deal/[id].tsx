@@ -42,7 +42,8 @@ export default function DealDetailScreen() {
   const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
   const id = asRouteId(rawId);
   const router = useRouter();
-  const { isAuthenticated, isVerified, role, user } = useAuth();
+  const { isAuthenticated, isVerified, role, user, isVerificationExpired } =
+    useAuth();
 
   const accessKey = [
     isAuthenticated ? "auth" : "anon",
@@ -72,7 +73,7 @@ export default function DealDetailScreen() {
     );
   }
 
-  if (error || !deal) {
+  if (error || !deal || (isExpiredDeal(deal) && !isPrivilegedRole)) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorTitle}>Deal not found</Text>
@@ -133,6 +134,7 @@ export default function DealDetailScreen() {
         ) : showVerificationWall ? (
           <VerificationWall
             isPending={isInFlight}
+            expired={isVerificationExpired}
             onVerify={() => router.push("/profile")}
           />
         ) : deal.type === "In-Store" ? (
@@ -183,21 +185,32 @@ function ScheduleWall({
 
 function VerificationWall({
   isPending,
+  expired,
   onVerify,
 }: {
   isPending: boolean;
+  expired: boolean;
   onVerify: () => void;
 }) {
   return (
     <View style={styles.wall}>
       <BadgeCheck color={colors.onPrimaryContainer} size={22} />
-      <Text style={styles.wallTitle}>Verification required</Text>
+      <Text style={styles.wallTitle}>
+        {expired ? "Verification expired" : "Verification required"}
+      </Text>
       <Text style={styles.wallBody}>
-        Verify your student status to reveal online codes and generate in-store
-        tickets.
+        {expired
+          ? "Student status is valid for 12 months. Re-verify to reveal online codes and generate in-store tickets."
+          : "Verify your student status to reveal online codes and generate in-store tickets. Status is valid for 12 months."}
       </Text>
       <Button
-        label={isPending ? "Verification pending" : "Go to verification"}
+        label={
+          isPending
+            ? "Verification pending"
+            : expired
+              ? "Re-verify on Profile"
+              : "Go to verification"
+        }
         onPress={onVerify}
       />
     </View>

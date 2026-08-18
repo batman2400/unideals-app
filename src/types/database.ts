@@ -4,7 +4,8 @@
  * These mirror the tables and RPC signatures defined in the SQL migrations at
  * the root of the web repository (`supabase_schema.sql`,
  * `supabase_partner_access.sql`, `supabase_portal_redesign.sql`,
- * `supabase_deal_auto_launch.sql`, `supabase_student_verification.sql`).
+ * `supabase_deal_auto_launch.sql`, `supabase_student_verification.sql`,
+ * `supabase_yearly_student_verification.sql`).
  */
 
 export type UserRole = "student" | "partner" | "admin";
@@ -30,6 +31,8 @@ export interface UserRoleRow {
   user_email: string | null;
   is_verified: boolean;
   university_email: string | null;
+  /** Last student verification approval. Students re-verify after 1 year. */
+  verified_at: string | null;
   created_at: string;
 }
 

@@ -16,18 +16,21 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsGroup } from "@/components/SettingsGroup";
 import { StudentIdCard } from "@/components/StudentIdCard";
 import { VerificationPanel } from "@/components/VerificationPanel";
 import { useAuth } from "@/context/AuthContext";
+import { useTabBarCollapseScrollHandler } from "@/context/TabBarMotionContext";
+import { formatVerificationExpiry } from "@/lib/studentVerification";
 import { useStudentVerificationRequest } from "@/lib/useVerificationRequest";
+import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import { STUDENT_PASS_URI_PREFIX, type UserRole } from "@/types/database";
 
@@ -47,9 +50,20 @@ export interface ProfileScreenProps {
 }
 
 export function ProfileScreen({ extraSections }: ProfileScreenProps) {
-  const { user, role, isVerified, metadata, signOut } = useAuth();
+  const {
+    user,
+    role,
+    isVerified,
+    verifiedAt,
+    isVerificationExpired,
+    isVerificationExpiringSoon,
+    metadata,
+    signOut,
+    refreshRole,
+  } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const onScroll = useTabBarCollapseScrollHandler();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [verificationFormOpen, setVerificationFormOpen] = useState(false);
 
@@ -62,8 +76,7 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
   const showVerification =
     showDefaultStudentSections &&
     role === "student" &&
-    !isVerified &&
-    !isTrusted;
+    (!isVerified || isVerificationExpiringSoon);
 
   const { request, error: verificationError, refresh: refreshVerification, isInFlight } =
     useStudentVerificationRequest(user?.id, showVerification);
@@ -72,6 +85,19 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
     () => (user ? `${STUDENT_PASS_URI_PREFIX}${user.id}` : ""),
     [user],
   );
+  const expiresAtLabel = formatVerificationExpiry(verifiedAt);
+  const passStatus = isVerified
+    ? "verified"
+    : isInFlight
+      ? "pending"
+      : isVerificationExpired
+        ? "expired"
+        : "unverified";
+
+  const handleVerificationChange = useCallback(() => {
+    void refreshVerification();
+    refreshRole();
+  }, [refreshRole, refreshVerification]);
 
   const handleSignOut = useCallback(() => {
     Alert.alert("Sign out", "You will need to sign in again to see your deals.", [
@@ -93,11 +119,14 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
   }, [signOut]);
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={styles.root}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + spacing.lg },
+        { paddingBottom: floatingTabBarScrollPadding(insets.bottom) },
       ]}
     >
       {showDefaultStudentSections ? (
@@ -110,7 +139,8 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
           batch={metadata.batch}
           department={metadata.department}
           qrPayload={passPayload}
-          status={isVerified ? "verified" : isInFlight ? "pending" : "unverified"}
+          status={passStatus}
+          expiresAtLabel={expiresAtLabel}
           onUnverifiedPress={
             showVerification ? () => setVerificationFormOpen(true) : undefined
           }
@@ -186,7 +216,9 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
               rejectReason={request?.rejectReason ?? null}
               formOpen={verificationFormOpen}
               onFormOpenChange={setVerificationFormOpen}
-              onRequestChange={() => void refreshVerification()}
+              onRequestChange={handleVerificationChange}
+              renewal={isVerificationExpired || isVerificationExpiringSoon}
+              expiresOn={expiresAtLabel}
             />
           </>
         ) : null
@@ -277,7 +309,7 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
           {isSigningOut ? "Signing out…" : "Sign out"}
         </Text>
       </Pressable>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -288,7 +320,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
     gap: spacing.xl,
   },
   identityRow: {

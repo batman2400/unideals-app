@@ -13,7 +13,7 @@ import QRCode from "react-native-qrcode-svg";
 
 import { colors, radius, spacing } from "@/theme";
 
-export type StudentIdStatus = "verified" | "pending" | "unverified";
+export type StudentIdStatus = "verified" | "pending" | "unverified" | "expired";
 
 export interface StudentIdCardProps {
   fullName: string;
@@ -25,6 +25,8 @@ export interface StudentIdCardProps {
   department?: string;
   qrPayload: string;
   status: StudentIdStatus;
+  /** Formatted yearly expiry, e.g. "18 Aug 2027". */
+  expiresAtLabel?: string | null;
   onUnverifiedPress?: () => void;
 }
 
@@ -32,6 +34,7 @@ const STATUS_LABEL: Record<StudentIdStatus, string> = {
   verified: "Verified",
   pending: "Pending",
   unverified: "Unverified",
+  expired: "Expired",
 };
 
 export function StudentIdCard({
@@ -44,6 +47,7 @@ export function StudentIdCard({
   department,
   qrPayload,
   status,
+  expiresAtLabel,
   onUnverifiedPress,
 }: StudentIdCardProps) {
   const progress = useRef(new Animated.Value(0)).current;
@@ -57,8 +61,11 @@ export function StudentIdCard({
         .filter(Boolean)
         .join(" · ") || "Not set";
 
+  const needsVerification =
+    (status === "unverified" || status === "expired") && Boolean(onUnverifiedPress);
+
   const flip = useCallback(() => {
-    if (status === "unverified" && onUnverifiedPress) {
+    if (needsVerification && onUnverifiedPress) {
       onUnverifiedPress();
       return;
     }
@@ -74,7 +81,7 @@ export function StudentIdCard({
       flipping.current = false;
       setShowingBack(next);
     });
-  }, [onUnverifiedPress, progress, status]);
+  }, [needsVerification, onUnverifiedPress, progress]);
 
   const frontRotate = progress.interpolate({
     inputRange: [0, 1],
@@ -95,12 +102,29 @@ export function StudentIdCard({
 
   const canShowQr = status === "verified" && qrPayload.length > 0;
 
+  const frontHint =
+    status === "expired"
+      ? "Tap to re-verify for this year"
+      : needsVerification
+        ? "Tap to get verified"
+        : expiresAtLabel
+          ? `Valid until ${expiresAtLabel} · Tap to show code`
+          : "Tap to show code";
+
+  const backHint = canShowQr
+    ? expiresAtLabel
+      ? `Valid until ${expiresAtLabel}. Deals use a timed ticket. Tap to flip back.`
+      : "Deals use a timed ticket. Tap to flip back."
+    : "Verify to activate your pass";
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        status === "unverified" && onUnverifiedPress
-          ? "Get verified"
+        needsVerification
+          ? status === "expired"
+            ? "Re-verify student status"
+            : "Get verified"
           : showingBack
             ? "Hide student code"
             : "Show student code"
@@ -162,7 +186,7 @@ export function StudentIdCard({
               </View>
             </View>
 
-            <Text style={styles.hint}>Tap to show code</Text>
+            <Text style={styles.hint}>{frontHint}</Text>
           </CardShell>
         </Animated.View>
 
@@ -197,15 +221,15 @@ export function StudentIdCard({
                 <View style={[styles.qrPlate, styles.qrLocked]}>
                   <ShieldQuestion color={colors.onSurfaceVariant} size={28} />
                   <Text style={styles.qrLockedText}>
-                    Verify to activate your pass
+                    {status === "expired"
+                      ? "Re-verify to activate your pass"
+                      : "Verify to activate your pass"}
                   </Text>
                 </View>
               )}
             </View>
 
-            <Text style={styles.hint}>
-              Deals use a timed ticket. Tap to flip back.
-            </Text>
+            <Text style={styles.hint}>{backHint}</Text>
           </CardShell>
         </Animated.View>
       </View>

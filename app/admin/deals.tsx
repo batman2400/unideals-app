@@ -27,7 +27,6 @@ const FILTERS: readonly { value: AdminDealStatusFilter; label: string }[] = [
   { value: "pending", label: "Pending" },
   { value: "active", label: "Active" },
   { value: "scheduled", label: "Scheduled" },
-  { value: "expired", label: "Expired" },
   { value: "paused", label: "Paused" },
 ];
 
@@ -105,7 +104,7 @@ function AdminDealCard({
         </View>
         <View style={[styles.badge, { backgroundColor: badge.backgroundColor }]}>
           <Text style={[styles.badgeText, { color: badge.color }]}>
-            {lifecycle}
+            {lifecycle === "expired" ? "finished" : lifecycle}
           </Text>
         </View>
       </View>
@@ -208,7 +207,11 @@ function AdminDealCard({
   );
 }
 
-export default function AdminDealsScreen() {
+export function AdminDealsView({
+  finishedOnly = false,
+}: {
+  finishedOnly?: boolean;
+}) {
   const [statusFilter, setStatusFilter] =
     useState<AdminDealStatusFilter>("all");
   const [inputValue, setInputValue] = useState("");
@@ -218,6 +221,10 @@ export default function AdminDealsScreen() {
     const timer = setTimeout(() => setSearchQuery(inputValue.trim()), 400);
     return () => clearTimeout(timer);
   }, [inputValue]);
+
+  const activeFilter: AdminDealStatusFilter = finishedOnly
+    ? "expired"
+    : statusFilter;
 
   const {
     deals,
@@ -231,7 +238,7 @@ export default function AdminDealsScreen() {
     refresh,
     setDealStatus,
     deleteDeal,
-  } = useAdminDeals(statusFilter, searchQuery);
+  } = useAdminDeals(activeFilter, searchQuery);
 
   return (
     <View style={styles.root}>
@@ -249,10 +256,11 @@ export default function AdminDealsScreen() {
         ListHeaderComponent={
           <View style={styles.headerBlock}>
             <Text style={styles.subtitle}>
-              Full deal catalogue with status management, search, and tracking
-              stats.
+              {finishedOnly
+                ? "Ended offers are hidden from students. Delete them here if they should be removed."
+                : "Full deal catalogue with status management, search, and tracking stats. Finished deals live in Finished Deals."}
             </Text>
-            {statusFilter === "all" && totalCount > pageLimit ? (
+            {!finishedOnly && statusFilter === "all" && totalCount > pageLimit ? (
               <Text style={styles.capNote}>
                 Showing first {pageLimit} of {totalCount}
               </Text>
@@ -279,11 +287,13 @@ export default function AdminDealsScreen() {
                 autoCorrect={false}
               />
             </View>
-            <SegmentedControl
-              options={FILTERS}
-              value={statusFilter}
-              onChange={setStatusFilter}
-            />
+            {finishedOnly ? null : (
+              <SegmentedControl
+                options={FILTERS}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
+            )}
           </View>
         }
         ListEmptyComponent={
@@ -293,7 +303,9 @@ export default function AdminDealsScreen() {
             </View>
           ) : (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyBody}>No deals found.</Text>
+              <Text style={styles.emptyBody}>
+                {finishedOnly ? "No finished deals." : "No deals found."}
+              </Text>
             </View>
           )
         }
@@ -331,6 +343,10 @@ export default function AdminDealsScreen() {
       />
     </View>
   );
+}
+
+export default function AdminDealsScreen() {
+  return <AdminDealsView />;
 }
 
 const styles = StyleSheet.create({

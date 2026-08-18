@@ -31,6 +31,9 @@ interface VerificationPanelProps {
   formOpen: boolean;
   onFormOpenChange: (open: boolean) => void;
   onRequestChange: () => void;
+  /** Yearly re-verification after expiry or during the renewal window. */
+  renewal?: boolean;
+  expiresOn?: string | null;
 }
 
 export function VerificationPanel({
@@ -40,6 +43,8 @@ export function VerificationPanel({
   formOpen,
   onFormOpenChange,
   onRequestChange,
+  renewal = false,
+  expiresOn,
 }: VerificationPanelProps) {
   const { user } = useAuth();
   const inFlight = isVerificationInFlight(requestStatus);
@@ -83,7 +88,9 @@ export function VerificationPanel({
   if (inFlight) {
     return (
       <View style={styles.card}>
-        <Text style={styles.title}>Verification pending</Text>
+        <Text style={styles.title}>
+          {renewal ? "Renewal pending" : "Verification pending"}
+        </Text>
         <Text style={styles.pending}>
           {requestStatus === "awaiting_confirmation"
             ? "We confirmed your university inbox. An admin will check both sides of your student ID next."
@@ -96,7 +103,9 @@ export function VerificationPanel({
   if (!formOpen) {
     return (
       <View style={styles.card}>
-        <Text style={styles.title}>Get verified</Text>
+        <Text style={styles.title}>
+          {renewal ? "Re-verify for this year" : "Get verified"}
+        </Text>
         {isRejected ? (
           <View style={styles.rejectBox}>
             <Text style={styles.rejectTitle}>
@@ -108,11 +117,21 @@ export function VerificationPanel({
           </View>
         ) : (
           <Text style={styles.body}>
-            Verify your student status to unlock deal codes and in-store tickets.
+            {renewal
+              ? expiresOn
+                ? `Student status is valid for 12 months. Re-verify by ${expiresOn} to keep deal codes and in-store tickets.`
+                : "Student status is valid for 12 months. Re-verify to keep deal codes and in-store tickets."
+              : "Verify your student status to unlock deal codes and in-store tickets. Status is valid for 12 months."}
           </Text>
         )}
         <Button
-          label={isRejected ? "Resubmit verification" : "Get verified"}
+          label={
+            isRejected
+              ? "Resubmit verification"
+              : renewal
+                ? "Re-verify now"
+                : "Get verified"
+          }
           onPress={() => onFormOpenChange(true)}
         />
       </View>
@@ -121,7 +140,9 @@ export function VerificationPanel({
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>Get verified</Text>
+      <Text style={styles.title}>
+        {renewal ? "Re-verify for this year" : "Get verified"}
+      </Text>
       {isRejected ? (
         <View style={styles.rejectBox}>
           <Text style={styles.rejectTitle}>Your last request was not approved</Text>
@@ -136,8 +157,8 @@ export function VerificationPanel({
       ) : (
         <Text style={styles.body}>
           {isSchoolStudent
-            ? "School students send both sides of a student ID for admin review."
-            : "Use a university email so we can confirm your inbox, then an admin checks your ID. Without an institute email, use manual verification."}
+            ? "School students send both sides of a student ID for admin review. Verification is valid for 12 months."
+            : "Use a university email so we can confirm your inbox, then an admin checks your ID. Without an institute email, use manual verification. Status is valid for 12 months."}
         </Text>
       )}
 
@@ -339,7 +360,8 @@ function EmailOtpForm({
     <View style={styles.form}>
       <Text style={styles.hint}>
         We confirm the inbox first, then an admin checks both sides of your
-        student ID. You are not verified until an admin approves.
+        student ID. You are not verified until an admin approves. Status lasts
+        12 months.
       </Text>
       <FormField
         label="University email"
@@ -506,7 +528,7 @@ function ManualForm({
     <View style={styles.form}>
       <Text style={styles.hint}>
         Upload both sides of your student ID for admin review. You are not
-        verified until an admin approves.
+        verified until an admin approves. Status lasts 12 months.
       </Text>
       <SegmentedControl
         options={[

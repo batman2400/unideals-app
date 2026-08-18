@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   ChevronLeft,
   ClipboardList,
+  Clock3,
   FileText,
+  History,
   Mail,
   Package,
   QrCode,
@@ -192,10 +194,22 @@ export default function AdminDashboardScreen() {
               onPress: () => router.push("/admin/deals" as Href),
             },
             {
+              key: "finished-deals",
+              label: "Finished Deals",
+              icon: <History color={colors.primary} size={20} />,
+              onPress: () => router.push("/admin/finished-deals" as Href),
+            },
+            {
               key: "events",
               label: "All Events",
               icon: <CalendarDays color={colors.primary} size={20} />,
               onPress: () => router.push("/admin/events" as Href),
+            },
+            {
+              key: "finished-events",
+              label: "Finished Events",
+              icon: <Clock3 color={colors.primary} size={20} />,
+              onPress: () => router.push("/admin/finished-events" as Href),
             },
             {
               key: "blog",

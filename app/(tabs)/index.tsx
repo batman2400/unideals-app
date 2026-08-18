@@ -12,11 +12,13 @@ import {
   Text,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
 import { SaveDealButton } from "@/components/DealCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { useTabBarCollapseScrollHandler } from "@/context/TabBarMotionContext";
 import {
   formatEventWhen,
   formatLaunchRelative,
@@ -27,6 +29,7 @@ import {
 import { useDeals } from "@/lib/useDeals";
 import { useEvents } from "@/lib/useEvents";
 import { useSavedDeals } from "@/lib/useSavedDeals";
+import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import type { CampusEvent, Deal } from "@/types/database";
 
@@ -37,6 +40,7 @@ const CARD_RADIUS = 16;
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const onScroll = useTabBarCollapseScrollHandler();
   const {
     deals,
     isLoading: dealsLoading,
@@ -78,12 +82,14 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={styles.root}
       contentContainerStyle={{
         paddingTop: insets.top + spacing.sm,
-        paddingBottom: spacing.xxl,
+        paddingBottom: floatingTabBarScrollPadding(insets.bottom),
       }}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
@@ -237,7 +243,7 @@ export default function HomeScreen() {
           submitting an event.
         </Text>
       )}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 

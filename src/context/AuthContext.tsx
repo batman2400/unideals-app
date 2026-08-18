@@ -5,10 +5,16 @@
  * pieces the web app keeps apart — the session bootstrap in `App.jsx` and the
  * role resolution in `src/lib/useRole.js` — into one provider.
  *
+ * Cold start only blocks the splash on the local session restore
+ * (`onAuthStateChange` / `INITIAL_SESSION`). Last-known role is rehydrated
+ * from disk so partner/admin routes do not flicker, then `get_user_role()`
+ * and `user_roles` refresh in the background.
+ *
  * Role resolution follows the web app exactly:
  *   1. `get_user_role()` RPC is authoritative.
- *   2. `public.user_roles` is read for `is_verified`, and acts as the fallback
- *      role source when the RPC fails.
+ *   2. `public.user_roles` is read for `is_verified` / `verified_at`, and acts
+ *      as the fallback role source when the RPC fails. Student verification
+ *      is current for 12 months from `verified_at`.
  *   3. A realtime subscription on the caller's `user_roles` row keeps the role
  *      fresh when an admin promotes or verifies the account mid-session.
  */
@@ -29,14 +35,27 @@ import {
   type ReactNode,
 } from "react";
 
-import { supabase, toErrorMessage } from "@/lib/supabase";
 import { getPasswordResetRedirectUrl } from "@/lib/authDeepLink";
 import { signInWithGoogle as startGoogleSignIn } from "@/lib/googleAuth";
+import {
+  clearCachedUserRole,
+  readCachedUserRole,
+  writeCachedUserRole,
+  type CachedUserRole,
+} from "@/lib/roleCache";
+import {
+  isStudentVerificationCurrent,
+  isStudentVerificationExpired,
+  isStudentVerificationExpiringSoon,
+  studentVerificationExpiresAt,
+} from "@/lib/studentVerification";
+import { supabase, toErrorMessage } from "@/lib/supabase";
 import { isUserRole, type UserMetadata, type UserRole } from "@/types/database";
 
 interface UserRoleLookup {
   role: UserRole | null;
   is_verified: boolean | null;
+  verified_at?: string | null;
 }
 
 export interface SignUpDetails {
@@ -53,12 +72,26 @@ export interface AuthContextValue {
   user: User | null;
   /** Active Supabase session, or `null` when signed out. */
   session: Session | null;
-  /** Resolved application role. `null` until the first resolution completes. */
+  /** Resolved application role. `null` until cache or network resolution. */
   role: UserRole | null;
-  /** `true` while the initial session + role resolution is in flight. */
+  /**
+   * `true` only while the initial session restore is in flight. Role may
+   * still refresh in the background after this becomes `false`.
+   */
   isLoading: boolean;
-  /** Mirrors `user_roles.is_verified` — student verification status. */
+  /**
+   * Student perks are unlocked only while verification is current.
+   * Students must re-verify every 12 months.
+   */
   isVerified: boolean;
+  /** Last student verification approval (`user_roles.verified_at`). */
+  verifiedAt: string | null;
+  /** 12 months after `verifiedAt`, or `null` when never verified. */
+  verificationExpiresAt: string | null;
+  /** Previously verified student whose 12-month window has ended. */
+  isVerificationExpired: boolean;
+  /** Verified student within 30 days of the yearly renewal deadline. */
+  isVerificationExpiringSoon: boolean;
   isAuthenticated: boolean;
   /**
    * `true` only after a password-recovery deep link / `PASSWORD_RECOVERY`
@@ -92,17 +125,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [isVerified, setIsVerified] = useState(false);
+  const [verifiedAt, setVerifiedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const resolvedForUserIdRef = useRef<string | null>(null);
+  const sessionUserIdRef = useRef<string | null>(null);
+  const roleRequestIdRef = useRef(0);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const channelUserIdRef = useRef<string | null>(null);
+  const fetchRoleRef = useRef<(userId: string) => void>(() => {});
 
   useEffect(() => {
     let active = true;
+    let memoryCache: CachedUserRole | null = null;
+    let diskCacheSettled = false;
+
+    const diskCachePromise = readCachedUserRole().then((value) => {
+      if (!diskCacheSettled) {
+        memoryCache = value;
+        diskCacheSettled = true;
+      }
+      return memoryCache;
+    });
 
     const detachRoleChannel = (): void => {
       if (channelRef.current) {
@@ -116,17 +162,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * Reads the role for `userId`, preferring the RPC and falling back to a
      * direct `user_roles` read. Always returns a verification flag.
      */
+    const readRoleRow = async (
+      userId: string,
+      includeVerifiedAt: boolean,
+    ) => {
+      return supabase
+        .from("user_roles")
+        .select(includeVerifiedAt ? "role, is_verified, verified_at" : "role, is_verified")
+        .eq("user_id", userId)
+        .maybeSingle<UserRoleLookup>();
+    };
+
     const readRole = async (
       userId: string,
-    ): Promise<{ role: UserRole; isVerified: boolean }> => {
-      const [rpcResponse, rowResponse] = await Promise.all([
+    ): Promise<{ role: UserRole; isVerified: boolean; verifiedAt: string | null }> => {
+      try {
+        await supabase.rpc("expire_stale_student_verifications");
+      } catch {
+        // SQL may not be applied yet; client still enforces the 12-month window.
+      }
+
+      let [rpcResponse, rowResponse] = await Promise.all([
         supabase.rpc("get_user_role"),
-        supabase
-          .from("user_roles")
-          .select("role, is_verified")
-          .eq("user_id", userId)
-          .maybeSingle<UserRoleLookup>(),
+        readRoleRow(userId, true),
       ]);
+
+      if (
+        rowResponse.error &&
+        /verified_at/i.test(rowResponse.error.message ?? "")
+      ) {
+        rowResponse = await readRoleRow(userId, false);
+      }
 
       const rpcRole = isUserRole(rpcResponse.data) ? rpcResponse.data : null;
       const rowRole = isUserRole(rowResponse.data?.role)
@@ -137,11 +203,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw rpcResponse.error;
       }
 
-      const resolvedRole = rpcRole ?? rowRole;
+      const resolvedRole = rpcRole ?? rowRole ?? null;
+      const verifiedAt =
+        typeof rowResponse.data?.verified_at === "string"
+          ? rowResponse.data.verified_at
+          : null;
+      const verifiedFlag = rowResponse.data?.is_verified === true;
+      const currentlyVerified =
+        resolvedRole === "student"
+          ? isStudentVerificationCurrent(verifiedFlag, verifiedAt)
+          : verifiedFlag;
+
       if (resolvedRole) {
         return {
           role: resolvedRole,
-          isVerified: rowResponse.data?.is_verified === true,
+          isVerified: currentlyVerified,
+          verifiedAt,
         };
       }
 
@@ -157,9 +234,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return {
         role: DEFAULT_ROLE,
-        isVerified: rowResponse.data?.is_verified === true,
+        isVerified: currentlyVerified,
+        verifiedAt,
       };
     };
+
+    const hydrateRoleFromCache = (
+      userId: string,
+      cached: CachedUserRole | null,
+    ): void => {
+      if (cached && cached.userId === userId) {
+        const currentlyVerified =
+          cached.role === "student"
+            ? isStudentVerificationCurrent(cached.isVerified, cached.verifiedAt)
+            : cached.isVerified;
+        setRole(cached.role);
+        setIsVerified(currentlyVerified);
+        setVerifiedAt(cached.verifiedAt);
+        resolvedForUserIdRef.current = userId;
+        return;
+      }
+
+      if (resolvedForUserIdRef.current !== userId) {
+        setRole(null);
+        setIsVerified(false);
+        setVerifiedAt(null);
+      }
+    };
+
+    const fetchRole = (userId: string): void => {
+      const requestId = ++roleRequestIdRef.current;
+
+      void (async () => {
+        try {
+          const resolved = await readRole(userId);
+          if (!active || requestId !== roleRequestIdRef.current) return;
+          if (sessionUserIdRef.current !== userId) return;
+
+          setRole(resolved.role);
+          setIsVerified(resolved.isVerified);
+          setVerifiedAt(resolved.verifiedAt);
+          resolvedForUserIdRef.current = userId;
+          setError(null);
+
+          memoryCache = {
+            userId,
+            role: resolved.role,
+            isVerified: resolved.isVerified,
+            verifiedAt: resolved.verifiedAt,
+          };
+          diskCacheSettled = true;
+          void writeCachedUserRole(memoryCache);
+        } catch (caught) {
+          if (!active || requestId !== roleRequestIdRef.current) return;
+          // Keep the last known role on transient failures so the UI does not
+          // bounce a signed-in partner back to the student experience.
+          setError(toErrorMessage(caught, "Failed to load user role."));
+        }
+      })();
+    };
+
+    fetchRoleRef.current = fetchRole;
 
     const attachRoleChannel = (userId: string | null): void => {
       if (!userId) {
@@ -184,7 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             filter: `user_id=eq.${userId}`,
           },
           () => {
-            void resolve(null, true);
+            fetchRole(userId);
           },
         )
         .subscribe();
@@ -192,71 +327,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       channelUserIdRef.current = userId;
     };
 
-    const resolve = async (
-      sessionOverride: Session | null,
-      isBackgroundRefresh: boolean,
+    const applySession = async (
+      nextSession: Session | null,
+      refreshRoleFromNetwork: boolean,
     ): Promise<void> => {
       if (!active) return;
 
-      try {
+      const nextUserId = nextSession?.user?.id ?? null;
+      sessionUserIdRef.current = nextUserId;
+      setSession(nextSession);
+      attachRoleChannel(nextUserId);
+
+      if (!nextUserId) {
+        roleRequestIdRef.current += 1;
+        setRole(null);
+        setIsVerified(false);
+        setVerifiedAt(null);
+        resolvedForUserIdRef.current = null;
         setError(null);
+        memoryCache = null;
+        diskCacheSettled = true;
+        setIsLoading(false);
+        void clearCachedUserRole();
+        return;
+      }
 
-        let nextSession = sessionOverride;
-
-        if (!nextSession) {
-          const { data, error: sessionError } =
-            await supabase.auth.getSession();
-          if (sessionError) throw sessionError;
-          nextSession = data.session;
+      if (resolvedForUserIdRef.current !== nextUserId) {
+        if (!diskCacheSettled) {
+          await diskCachePromise;
         }
+        if (!active || sessionUserIdRef.current !== nextUserId) return;
+        hydrateRoleFromCache(nextUserId, memoryCache);
+      }
 
-        if (!active) return;
+      setIsLoading(false);
 
-        const nextUserId = nextSession?.user?.id ?? null;
-        const sessionChanged = resolvedForUserIdRef.current !== nextUserId;
-
-        // Hold the splash until this session's role is known — including
-        // re-login after a previous user already resolved once.
-        if (!isBackgroundRefresh && sessionChanged) {
-          setIsLoading(true);
-        }
-
-        setSession(nextSession);
-
-        const nextUser = nextSession?.user ?? null;
-        attachRoleChannel(nextUser?.id ?? null);
-
-        if (!nextUser) {
-          setRole(null);
-          setIsVerified(false);
-          resolvedForUserIdRef.current = null;
-          return;
-        }
-
-        if (sessionChanged) {
-          setRole(null);
-          setIsVerified(false);
-        }
-
-        const resolved = await readRole(nextUser.id);
-        if (!active) return;
-
-        setRole(resolved.role);
-        setIsVerified(resolved.isVerified);
-        resolvedForUserIdRef.current = nextUser.id;
-      } catch (caught) {
-        if (!active) return;
-        // Keep the last known role on transient failures so the UI does not
-        // bounce a signed-in partner back to the student experience.
-        setError(toErrorMessage(caught, "Failed to load user role."));
-      } finally {
-        if (active) {
-          setIsLoading(false);
-        }
+      // Token refresh / user-updated should not refetch role unless this
+      // user has not been resolved yet (cache miss on a TOKEN_REFRESHED-first
+      // cold start).
+      if (
+        refreshRoleFromNetwork ||
+        resolvedForUserIdRef.current !== nextUserId
+      ) {
+        fetchRole(nextUserId);
       }
     };
-
-    void resolve(null, false);
 
     const {
       data: { subscription },
@@ -268,9 +383,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsPasswordRecovery(false);
         }
 
-        const isBackground =
-          event === "TOKEN_REFRESHED" || event === "USER_UPDATED";
-        void resolve(nextSession, isBackground);
+        const refreshRoleFromNetwork =
+          event !== "TOKEN_REFRESHED" && event !== "USER_UPDATED";
+        void applySession(nextSession, refreshRoleFromNetwork);
       },
     );
 
@@ -279,10 +394,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
       detachRoleChannel();
     };
-  }, [refreshKey]);
+  }, []);
 
   const refreshRole = useCallback(() => {
-    setRefreshKey((previous) => previous + 1);
+    const userId = sessionUserIdRef.current;
+    if (userId) fetchRoleRef.current(userId);
   }, []);
 
   const signIn = useCallback(
@@ -367,6 +483,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const user = session?.user ?? null;
+  const isStudent = role === "student";
+  const verificationExpiresAt = isStudent
+    ? (studentVerificationExpiresAt(verifiedAt)?.toISOString() ?? null)
+    : null;
+  const isVerificationExpired =
+    isStudent && isStudentVerificationExpired(verifiedAt);
+  const isVerificationExpiringSoon =
+    isStudent && isStudentVerificationExpiringSoon(isVerified, verifiedAt);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -375,6 +499,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       isLoading,
       isVerified,
+      verifiedAt,
+      verificationExpiresAt,
+      isVerificationExpired,
+      isVerificationExpiringSoon,
       isAuthenticated: user !== null,
       isPasswordRecovery,
       error,
@@ -394,6 +522,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       isLoading,
       isVerified,
+      verifiedAt,
+      verificationExpiresAt,
+      isVerificationExpired,
+      isVerificationExpiringSoon,
       isPasswordRecovery,
       error,
       signIn,

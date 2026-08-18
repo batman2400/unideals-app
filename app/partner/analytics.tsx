@@ -145,7 +145,7 @@ function DealStatCard({ stat }: { stat: PartnerDealStats }) {
           ]}
         >
           <Text style={[styles.statusText, { color: badge.color }]}>
-            {displayStatus}
+            {displayStatus === "expired" ? "finished" : displayStatus}
           </Text>
         </View>
       </View>

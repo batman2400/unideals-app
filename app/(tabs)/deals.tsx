@@ -1,26 +1,31 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Bookmark, Search } from "lucide-react-native";
+import { Bookmark } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import {
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
 import { DealCard } from "@/components/DealCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { SearchEntryRow } from "@/components/SearchEntryRow";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import {
+  useTabBarCollapseScrollHandler,
+  useTabBarMotion,
+} from "@/context/TabBarMotionContext";
 import { partitionDeals } from "@/lib/eventTiming";
 import { asScheduleParam } from "@/lib/routeParams";
-import { filterDeals, useDeals } from "@/lib/useDeals";
+import { useDeals } from "@/lib/useDeals";
 import { useSavedDeals } from "@/lib/useSavedDeals";
+import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import { OFFICIAL_DEAL_CATEGORIES } from "@/types/database";
 
@@ -41,7 +46,8 @@ export default function DealsScreen() {
   const params = useLocalSearchParams<{ schedule?: string | string[] }>();
   const { deals, isLoading, isRefreshing, error, refresh } = useDeals();
   const { savedIds, isLoading: savedLoading, toggleSave } = useSavedDeals();
-  const [query, setQuery] = useState("");
+  const { openSearch } = useTabBarMotion();
+  const onScroll = useTabBarCollapseScrollHandler();
   const [activeCategory, setActiveCategory] = useState("All");
   const [scheduleTab, setScheduleTab] = useState<ScheduleTab>("all");
 
@@ -60,10 +66,9 @@ export default function DealsScreen() {
         : scheduleTab === "live"
           ? live
           : [...live, ...comingSoon];
-    const searched = filterDeals(pool, query);
-    if (activeCategory === "All") return searched;
-    return searched.filter((deal) => deal.category === activeCategory);
-  }, [live, comingSoon, scheduleTab, query, activeCategory]);
+    if (activeCategory === "All") return pool;
+    return pool.filter((deal) => deal.category === activeCategory);
+  }, [live, comingSoon, scheduleTab, activeCategory]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -82,19 +87,10 @@ export default function DealsScreen() {
             <Bookmark color={colors.primary} size={20} />
           </Pressable>
         </View>
-        <View style={styles.searchField}>
-          <Search color={colors.onSurfaceVariant} size={18} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search deals, brands, categories"
-            placeholderTextColor={colors.inverseOnSurface}
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-        </View>
+        <SearchEntryRow
+          placeholder="Search deals, brands, categories"
+          onPress={(layout) => openSearch(layout, { scope: "deals" })}
+        />
 
         <View style={styles.scheduleWrap}>
           <SegmentedControl
@@ -141,10 +137,15 @@ export default function DealsScreen() {
       {isLoading ? (
         <ListSkeleton count={4} />
       ) : (
-        <FlatList
+        <Animated.FlatList
           data={filteredDeals}
           keyExtractor={(deal) => String(deal.id)}
-          contentContainerStyle={styles.listContent}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: floatingTabBarScrollPadding(insets.bottom) },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -184,7 +185,7 @@ export default function DealsScreen() {
                   ? error
                   : scheduleTab === "coming_soon"
                     ? "Scheduled deals will appear here until their go-live date."
-                    : "Try a different search term or switch the category back to All."}
+                    : "Try a different category or switch back to All."}
               </Text>
               {error ? (
                 <Button label="Retry" onPress={() => void refresh()} />
@@ -235,24 +236,6 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
-  searchField: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    height: 42,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-    backgroundColor: colors.surfaceContainerLowest,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.onSurface,
-    paddingVertical: 0,
-  },
   scheduleWrap: {
     paddingHorizontal: spacing.lg,
   },
@@ -281,7 +264,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
     gap: spacing.md,
   },
   errorBlock: {

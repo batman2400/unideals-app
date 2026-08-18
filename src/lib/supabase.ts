@@ -13,6 +13,8 @@
  *   VITE_SUPABASE_URL      -> EXPO_PUBLIC_SUPABASE_URL
  *   VITE_SUPABASE_ANON_KEY -> EXPO_PUBLIC_SUPABASE_ANON_KEY
  */
+import "./polyfillWebCrypto";
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Constants from "expo-constants";

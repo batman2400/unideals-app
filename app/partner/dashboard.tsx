@@ -184,11 +184,11 @@ export default function PartnerDashboardScreen() {
               onPress={() => router.push("/partner/deals" as Href)}
             />
             <StatCard
-              label="Expired Deals"
+              label="Finished Deals"
               value={metrics.expired}
               valueColor={colors.onSurfaceVariant}
               icon={<History color={colors.onSurfaceVariant} size={18} />}
-              onPress={() => router.push("/partner/deals" as Href)}
+              onPress={() => router.push("/partner/finished-deals" as Href)}
             />
             <StatCard
               label="Redemptions"
@@ -209,6 +209,11 @@ export default function PartnerDashboardScreen() {
             label="My Deals"
             icon={<Package color={colors.onPrimaryContainer} size={24} />}
             onPress={() => router.push("/partner/deals" as Href)}
+          />
+          <ActionTile
+            label="Finished Deals"
+            icon={<History color={colors.onPrimaryContainer} size={24} />}
+            onPress={() => router.push("/partner/finished-deals" as Href)}
           />
           <ActionTile
             label="Create Deal"
