@@ -22,7 +22,12 @@ export function SearchEntryRow({ placeholder, onPress }: SearchEntryRowProps) {
       accessibilityRole="button"
       accessibilityLabel={placeholder}
       onPress={() => {
-        rowRef.current?.measureInWindow((x, y, width, height) => {
+        const node = rowRef.current;
+        if (!node) {
+          onPress({ x: 0, y: 0, width: 0, height: 0 });
+          return;
+        }
+        node.measureInWindow((x, y, width, height) => {
           onPress({ x, y, width, height });
         });
       }}

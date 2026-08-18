@@ -144,3 +144,40 @@ export function filterDeals(deals: Deal[], query: string): Deal[] {
     ),
   );
 }
+
+export type DealBrandSummary = {
+  name: string;
+  dealCount: number;
+  imageUrl: string | null;
+};
+
+/** Unique brand names from the public deal list, with deal counts. */
+export function uniqueDealBrands(deals: Deal[]): DealBrandSummary[] {
+  const map = new Map<string, DealBrandSummary>();
+  for (const deal of deals) {
+    const name = deal.brand?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const existing = map.get(key);
+    if (existing) {
+      existing.dealCount += 1;
+      if (!existing.imageUrl && deal.imageUrl) existing.imageUrl = deal.imageUrl;
+    } else {
+      map.set(key, {
+        name,
+        dealCount: 1,
+        imageUrl: deal.imageUrl,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function filterDealBrands(
+  brands: DealBrandSummary[],
+  query: string,
+): DealBrandSummary[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return brands;
+  return brands.filter((brand) => brand.name.toLowerCase().includes(normalized));
+}

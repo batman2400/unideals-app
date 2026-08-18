@@ -1,5 +1,10 @@
-import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
-import { ChevronLeft, Search } from "lucide-react-native";
+import {
+  useLocalSearchParams,
+  useNavigation,
+  useRouter,
+  type Href,
+} from "expo-router";
+import { ChevronLeft, Search, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -14,6 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BrandResultRow } from "@/components/BrandResultRow";
 import { Button } from "@/components/Button";
 import { DealCard } from "@/components/DealCard";
 import { EventCard } from "@/components/EventCard";
@@ -29,7 +35,13 @@ import {
   splitLiveEvents,
 } from "@/lib/eventTiming";
 import { SEARCH_FIELD_HEIGHT } from "@/lib/tabBar";
-import { filterDeals, useDeals } from "@/lib/useDeals";
+import {
+  filterDealBrands,
+  filterDeals,
+  uniqueDealBrands,
+  useDeals,
+  type DealBrandSummary,
+} from "@/lib/useDeals";
 import { filterEvents, useEvents } from "@/lib/useEvents";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
@@ -37,12 +49,15 @@ import type { CampusEvent, Deal } from "@/types/database";
 
 type SearchItem =
   | { kind: "header"; id: string; title: string }
+  | { kind: "brand"; id: string; brand: DealBrandSummary }
   | { kind: "deal"; id: string; deal: Deal }
   | { kind: "event"; id: string; event: CampusEvent };
 
 function asSearchScope(param: string | string[] | undefined): SearchScope {
   const value = Array.isArray(param) ? param[0] : param;
-  if (value === "deals" || value === "events") return value;
+  if (value === "deals" || value === "events" || value === "brands") {
+    return value;
+  }
   return "all";
 }
 
@@ -54,6 +69,7 @@ export default function SearchScreen() {
   const { searchFieldVisible, closeSearch, morphProgress, chipHidden } =
     useTabBarMotion();
   const allowRemoveRef = useRef(false);
+  const inputRef = useRef<TextInput>(null);
 
   const { deals, isLoading: dealsLoading, isRefreshing: dealsRefreshing, error: dealsError, refresh: refreshDeals } =
     useDeals();
@@ -65,10 +81,18 @@ export default function SearchScreen() {
   const [scope, setScope] = useState<SearchScope>(() =>
     asSearchScope(params.scope),
   );
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
 
   useEffect(() => {
     setScope(asSearchScope(params.scope));
   }, [params.scope]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (event) => {
@@ -102,20 +126,72 @@ export default function SearchScreen() {
     [liveEvents],
   );
 
-  const items = useMemo(() => {
-    const dealPool = [...liveDeals, ...comingSoonDeals];
-    const eventPool = [...activeEvents, ...comingSoonEvents];
-    const trimmed = query.trim();
-    const matchedDeals =
-      scope === "events" ? [] : filterDeals(dealPool, query);
-    const matchedEvents =
-      scope === "deals" ? [] : filterEvents(eventPool, query);
+  const dealPool = useMemo(
+    () => [...liveDeals, ...comingSoonDeals],
+    [comingSoonDeals, liveDeals],
+  );
+  const eventPool = useMemo(
+    () => [...activeEvents, ...comingSoonEvents],
+    [activeEvents, comingSoonEvents],
+  );
+  const brands = useMemo(() => uniqueDealBrands(dealPool), [dealPool]);
 
+  const items = useMemo(() => {
+    const trimmed = query.trim();
+    const next: SearchItem[] = [];
+
+    if (selectedBrand) {
+      const brandDeals = filterDeals(
+        dealPool.filter(
+          (deal) => deal.brand.trim().toLowerCase() === selectedBrand.toLowerCase(),
+        ),
+        query,
+      );
+      if (brandDeals.length > 0) {
+        next.push({
+          kind: "header",
+          id: "header-brand-deals",
+          title: selectedBrand,
+        });
+        for (const deal of brandDeals) {
+          next.push({ kind: "deal", id: `deal-${deal.id}`, deal });
+        }
+      }
+      return next;
+    }
+
+    const matchedBrands =
+      scope === "deals" || scope === "events"
+        ? []
+        : filterDealBrands(brands, query);
+    const matchedDeals =
+      scope === "events" || scope === "brands"
+        ? []
+        : filterDeals(dealPool, query);
+    const matchedEvents =
+      scope === "deals" || scope === "brands"
+        ? []
+        : filterEvents(eventPool, query);
+
+    const brandSlice = trimmed ? matchedBrands : matchedBrands.slice(0, 6);
     const dealSlice = trimmed ? matchedDeals : matchedDeals.slice(0, 8);
     const eventSlice = trimmed ? matchedEvents : matchedEvents.slice(0, 6);
 
-    const next: SearchItem[] = [];
-    if (dealSlice.length > 0 && scope !== "events") {
+    if (brandSlice.length > 0) {
+      next.push({
+        kind: "header",
+        id: "header-brands",
+        title: trimmed || scope === "brands" ? "Brands" : "Suggested brands",
+      });
+      for (const brand of brandSlice) {
+        next.push({
+          kind: "brand",
+          id: `brand-${brand.name.toLowerCase()}`,
+          brand,
+        });
+      }
+    }
+    if (dealSlice.length > 0) {
       next.push({
         kind: "header",
         id: "header-deals",
@@ -125,7 +201,7 @@ export default function SearchScreen() {
         next.push({ kind: "deal", id: `deal-${deal.id}`, deal });
       }
     }
-    if (eventSlice.length > 0 && scope !== "deals") {
+    if (eventSlice.length > 0) {
       next.push({
         kind: "header",
         id: "header-events",
@@ -136,14 +212,7 @@ export default function SearchScreen() {
       }
     }
     return next;
-  }, [
-    activeEvents,
-    comingSoonDeals,
-    comingSoonEvents,
-    liveDeals,
-    query,
-    scope,
-  ]);
+  }, [brands, dealPool, eventPool, query, scope, selectedBrand]);
 
   const isLoading = dealsLoading || eventsLoading;
   const isRefreshing = dealsRefreshing || eventsRefreshing;
@@ -176,35 +245,53 @@ export default function SearchScreen() {
           style={[styles.field, !searchFieldVisible && styles.fieldHidden]}
         >
           <Search color={colors.onSurfaceVariant} size={18} />
-          {searchFieldVisible ? (
-            <TextInput
-              style={styles.input}
-              placeholder="Search deals and events"
-              placeholderTextColor={colors.inverseOnSurface}
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-              returnKeyType="search"
-            />
-          ) : (
-            <View style={styles.input} />
-          )}
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder="Search deals, events, and brands"
+            placeholderTextColor={colors.inverseOnSurface}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            showSoftInputOnFocus
+          />
         </View>
       </View>
 
       <View style={styles.scopeWrap}>
         <SegmentedControl
           value={scope}
-          onChange={setScope}
+          onChange={(next) => {
+            setScope(next);
+            setSelectedBrand(null);
+          }}
           options={[
             { value: "all", label: "All" },
             { value: "deals", label: "Deals" },
             { value: "events", label: "Events" },
+            { value: "brands", label: "Brands" },
           ]}
         />
       </View>
+
+      {selectedBrand ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Clear ${selectedBrand} filter`}
+          onPress={() => setSelectedBrand(null)}
+          style={({ pressed }) => [
+            styles.brandChip,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.brandChipLabel} numberOfLines={1}>
+            {selectedBrand}
+          </Text>
+          <X color={colors.onPrimary} size={14} strokeWidth={2.4} />
+        </Pressable>
+      ) : null}
 
       {isLoading ? (
         <ListSkeleton count={4} />
@@ -213,6 +300,7 @@ export default function SearchScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -228,6 +316,14 @@ export default function SearchScreen() {
           renderItem={({ item }) => {
             if (item.kind === "header") {
               return <Text style={styles.sectionTitle}>{item.title}</Text>;
+            }
+            if (item.kind === "brand") {
+              return (
+                <BrandResultRow
+                  brand={item.brand}
+                  onPress={(brand) => setSelectedBrand(brand.name)}
+                />
+              );
             }
             if (item.kind === "deal") {
               return (
@@ -264,12 +360,16 @@ export default function SearchScreen() {
           ListEmptyComponent={
             <View style={styles.stateBlock}>
               <Text style={styles.stateTitle}>
-                {error ? "Could not load results" : "No matches"}
+                {error
+                  ? "Could not load results"
+                  : selectedBrand
+                    ? `No deals for ${selectedBrand}`
+                    : "No matches"}
               </Text>
               <Text style={styles.stateBody}>
                 {error
                   ? error
-                  : "Try a different search term or switch All / Deals / Events."}
+                  : "Try a different search term or switch All / Deals / Events / Brands."}
               </Text>
             </View>
           }
@@ -324,6 +424,25 @@ const styles = StyleSheet.create({
   scopeWrap: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  brandChip: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    maxWidth: "80%",
+    paddingVertical: spacing.xs,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  brandChipLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.onPrimary,
   },
   listContent: {
     paddingHorizontal: spacing.lg,

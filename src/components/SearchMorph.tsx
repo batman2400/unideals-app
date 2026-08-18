@@ -61,14 +61,10 @@ export function SearchMorph() {
     opacity: interpolate(morphProgress.value, [0.45, 1], [0, 1]),
   }));
 
-  const overlayStyle = useAnimatedStyle(() => {
-    const morphing =
-      morphProgress.value > 0.001 ||
-      (chipHidden.value === 1 && searchFieldVisibleSv.value !== 1);
-    return {
-      opacity: morphing && searchFieldVisibleSv.value !== 1 ? 1 : 0,
-    };
-  });
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity:
+      chipHidden.value === 1 && searchFieldVisibleSv.value !== 1 ? 1 : 0,
+  }));
 
   return (
     <Animated.View

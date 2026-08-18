@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Dimensions } from "react-native";
+import { Dimensions, Keyboard } from "react-native";
 import {
   Easing,
   runOnJS,
@@ -25,7 +25,7 @@ import {
   type MeasuredLayout,
 } from "@/lib/tabBar";
 
-export type SearchScope = "all" | "deals" | "events";
+export type SearchScope = "all" | "deals" | "events" | "brands";
 
 type OpenSearchOptions = {
   scope?: SearchScope;
@@ -52,11 +52,13 @@ const TabBarMotionContext = createContext<TabBarMotionContextValue | null>(
 );
 
 const morphEasing = Easing.bezier(0.22, 1, 0.36, 1);
+const KEYBOARD_HIDE_FALLBACK_MS = 400;
 
 export function TabBarMotionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const closingRef = useRef(false);
+  const closeGenRef = useRef(0);
 
   const collapsed = useSharedValue(0);
   const collapseTarget = useSharedValue(0);
@@ -70,6 +72,14 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
   const chipH = useSharedValue(44);
 
   const [searchFieldVisible, setSearchFieldVisible] = useState(false);
+
+  const restoreChip = useCallback(() => {
+    chipHidden.value = 0;
+    searchFieldVisibleSv.value = 0;
+    morphProgress.value = 0;
+    closingRef.current = false;
+    setSearchFieldVisible(false);
+  }, [chipHidden, morphProgress, searchFieldVisibleSv]);
 
   const openSearch = useCallback(
     (layout?: MeasuredLayout | null, options?: OpenSearchOptions) => {
@@ -98,7 +108,10 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
         1,
         { duration: SEARCH_MORPH_MS, easing: morphEasing },
         (finished) => {
-          if (!finished) return;
+          if (!finished) {
+            runOnJS(restoreChip)();
+            return;
+          }
           searchFieldVisibleSv.value = 1;
           runOnJS(setSearchFieldVisible)(true);
         },
@@ -121,6 +134,7 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
       chipY,
       insets.bottom,
       morphProgress,
+      restoreChip,
       router,
       searchFieldVisibleSv,
     ],
@@ -130,28 +144,80 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
     (onFinished: () => void) => {
       if (closingRef.current) return;
       closingRef.current = true;
+      const gen = ++closeGenRef.current;
+
       searchFieldVisibleSv.value = 0;
       setSearchFieldVisible(false);
+      Keyboard.dismiss();
 
-      const finish = () => {
+      const state = { morphDone: false, keyboardDone: false, settled: false };
+      let hideSub: ReturnType<typeof Keyboard.addListener> | null = null;
+      let keyboardTimer: ReturnType<typeof setTimeout> | null = null;
+      let failSafe: ReturnType<typeof setTimeout> | null = null;
+
+      const cleanup = () => {
+        hideSub?.remove();
+        hideSub = null;
+        if (keyboardTimer) clearTimeout(keyboardTimer);
+        if (failSafe) clearTimeout(failSafe);
+        keyboardTimer = null;
+        failSafe = null;
+      };
+
+      const settle = () => {
+        if (state.settled || closeGenRef.current !== gen) return;
+        if (!state.morphDone || !state.keyboardDone) return;
+        state.settled = true;
+        cleanup();
         chipHidden.value = 0;
         closingRef.current = false;
         onFinished();
       };
+
+      const markKeyboardDone = () => {
+        if (closeGenRef.current !== gen) return;
+        state.keyboardDone = true;
+        settle();
+      };
+
+      const markMorphDone = () => {
+        if (closeGenRef.current !== gen) return;
+        state.morphDone = true;
+        settle();
+      };
+
+      const abort = () => {
+        if (state.settled || closeGenRef.current !== gen) return;
+        state.settled = true;
+        cleanup();
+        restoreChip();
+        onFinished();
+      };
+
+      hideSub = Keyboard.addListener("keyboardDidHide", () => {
+        hideSub?.remove();
+        hideSub = null;
+        markKeyboardDone();
+      });
+
+      keyboardTimer = setTimeout(markKeyboardDone, KEYBOARD_HIDE_FALLBACK_MS);
+      failSafe = setTimeout(abort, SEARCH_MORPH_MS + KEYBOARD_HIDE_FALLBACK_MS + 120);
 
       requestAnimationFrame(() => {
         morphProgress.value = withTiming(
           0,
           { duration: SEARCH_MORPH_MS, easing: morphEasing },
           (finished) => {
-            if (!finished) return;
-            chipHidden.value = 0;
-            runOnJS(finish)();
+            if (!finished) {
+              runOnJS(abort)();
+              return;
+            }
+            runOnJS(markMorphDone)();
           },
         );
       });
     },
-    [chipHidden, morphProgress, searchFieldVisibleSv],
+    [chipHidden, morphProgress, restoreChip, searchFieldVisibleSv],
   );
 
   const value = useMemo(

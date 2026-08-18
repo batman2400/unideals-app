@@ -37,8 +37,13 @@ export function SearchChip() {
       accessibilityRole="button"
       accessibilityLabel="Search"
       onPress={() => {
-        chipRef.current?.measureInWindow((x, y, width, height) => {
-          openSearch({ x, y, width, height });
+        const node = chipRef.current;
+        if (!node) {
+          openSearch(null);
+          return;
+        }
+        node.measureInWindow((x, y, width, height) => {
+          openSearch(width > 10 ? { x, y, width, height } : null);
         });
       }}
       style={({ pressed }) => [pressed && styles.pressed]}
