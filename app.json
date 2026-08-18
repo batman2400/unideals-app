@@ -4,9 +4,9 @@
     "slug": "unideals-app",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "unideals",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "backgroundColor": "#fcf9f8",
     "primaryColor": "#29695b",
     "ios": {
@@ -18,20 +18,28 @@
     },
     "android": {
       "package": "co.unideals.app",
-      "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.CAMERA"]
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "single",
+      "favicon": "./assets/icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#fcf9f8",
-          "resizeMode": "contain"
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 140,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
         }
       ],
       [
@@ -46,13 +54,18 @@
         {
           "photosPermission": "Uni Deals needs photo access so students can upload ID proof for verification."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "7f1e4075-ed21-4584-824b-b33ad677a2aa"
+      }
+    },
+    "owner": "uvaram2004"
   }
 }

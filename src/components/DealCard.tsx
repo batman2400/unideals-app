@@ -1,17 +1,75 @@
 import { Image } from "expo-image";
-import { Store, Tag } from "lucide-react-native";
+import { Clock, Heart, Store, Tag } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { colors, radius, spacing } from "@/theme";
+import {
+  formatLaunchRelative,
+  isComingSoonDeal,
+} from "@/lib/eventTiming";
+import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import type { Deal } from "@/types/database";
 
 interface DealCardProps {
   deal: Deal;
   onPress?: (deal: Deal) => void;
+  saved?: boolean;
+  saveDisabled?: boolean;
+  onToggleSave?: (dealId: number) => void | Promise<void>;
 }
 
-export function DealCard({ deal, onPress }: DealCardProps) {
+export function SaveDealButton({
+  saved,
+  disabled,
+  onPress,
+  variant = "card",
+}: {
+  saved: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+  variant?: "card" | "overlay";
+}) {
+  const isOverlay = variant === "overlay";
+  const iconColor = saved || isOverlay ? colors.white : colors.primary;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={saved ? "Remove from saved" : "Save deal"}
+      hitSlop={8}
+      disabled={disabled}
+      onPress={(event) => {
+        event.stopPropagation?.();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.saveBtn,
+        isOverlay ? styles.saveBtnOverlay : saved ? styles.saveBtnSaved : styles.saveBtnIdle,
+        pressed && styles.saveBtnPressed,
+        disabled && styles.saveBtnDisabled,
+      ]}
+    >
+      <Heart
+        size={16}
+        color={iconColor}
+        fill={saved ? iconColor : "transparent"}
+        strokeWidth={2.2}
+      />
+    </Pressable>
+  );
+}
+
+export function DealCard({
+  deal,
+  onPress,
+  saved = false,
+  saveDisabled = false,
+  onToggleSave,
+}: DealCardProps) {
   const isInStore = deal.type === "In-Store";
+  const comingSoon = isComingSoonDeal(deal);
+  const launchLabel = comingSoon
+    ? formatLaunchRelative(deal.startTime) || "Coming soon"
+    : null;
 
   return (
     <Pressable
@@ -34,21 +92,45 @@ export function DealCard({ deal, onPress }: DealCardProps) {
           </View>
         )}
 
-        <View style={[styles.badge, isInStore ? styles.badgeInStore : styles.badgeOnline]}>
-          {isInStore ? (
-            <Store color={colors.onErrorContainer} size={12} />
-          ) : (
-            <Tag color={colors.onPrimaryContainer} size={12} />
-          )}
-          <Text
+        {comingSoon ? (
+          <View style={[styles.badge, styles.badgeComingSoon]}>
+            <Clock color={colors.white} size={12} />
+            <Text style={[styles.badgeText, styles.badgeTextComingSoon]}>
+              Coming Soon
+            </Text>
+          </View>
+        ) : (
+          <View
             style={[
-              styles.badgeText,
-              isInStore ? styles.badgeTextInStore : styles.badgeTextOnline,
+              styles.badge,
+              isInStore ? styles.badgeInStore : styles.badgeOnline,
             ]}
           >
-            {deal.type}
-          </Text>
-        </View>
+            {isInStore ? (
+              <Store color={colors.onErrorContainer} size={12} />
+            ) : (
+              <Tag color={colors.onPrimaryContainer} size={12} />
+            )}
+            <Text
+              style={[
+                styles.badgeText,
+                isInStore ? styles.badgeTextInStore : styles.badgeTextOnline,
+              ]}
+            >
+              {deal.type}
+            </Text>
+          </View>
+        )}
+
+        {onToggleSave ? (
+          <View style={styles.saveWrap}>
+            <SaveDealButton
+              saved={saved}
+              disabled={saveDisabled}
+              onPress={() => void onToggleSave(deal.id)}
+            />
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.body}>
@@ -59,6 +141,9 @@ export function DealCard({ deal, onPress }: DealCardProps) {
           {deal.title}
         </Text>
         <Text style={styles.discount}>{deal.discount}</Text>
+        {launchLabel ? (
+          <Text style={styles.launchLabel}>{launchLabel}</Text>
+        ) : null}
         {deal.description ? (
           <Text style={styles.description} numberOfLines={2}>
             {deal.description}
@@ -82,6 +167,34 @@ const styles = StyleSheet.create({
   },
   imageWrap: {
     position: "relative",
+  },
+  saveWrap: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    zIndex: 2,
+  },
+  saveBtn: {
+    width: MIN_TAP_TARGET,
+    height: MIN_TAP_TARGET,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveBtnIdle: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+  },
+  saveBtnSaved: {
+    backgroundColor: colors.primary,
+  },
+  saveBtnOverlay: {
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  saveBtnPressed: {
+    opacity: 0.85,
+  },
+  saveBtnDisabled: {
+    opacity: 0.5,
   },
   image: {
     width: "100%",
@@ -109,6 +222,9 @@ const styles = StyleSheet.create({
   badgeOnline: {
     backgroundColor: colors.primaryContainer,
   },
+  badgeComingSoon: {
+    backgroundColor: colors.info,
+  },
   badgeText: {
     fontSize: 11,
     fontWeight: "700",
@@ -118,6 +234,9 @@ const styles = StyleSheet.create({
   },
   badgeTextOnline: {
     color: colors.onPrimaryContainer,
+  },
+  badgeTextComingSoon: {
+    color: colors.white,
   },
   body: {
     padding: spacing.lg,
@@ -140,6 +259,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.4,
     color: colors.primary,
+  },
+  launchLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.info,
   },
   description: {
     fontSize: 13,

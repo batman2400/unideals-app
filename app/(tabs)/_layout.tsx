@@ -1,17 +1,10 @@
 import { Tabs } from "expo-router";
-import { QrCode, Sparkles, UserRound } from "lucide-react-native";
+import { CalendarDays, Home, Sparkles, UserRound } from "lucide-react-native";
 import { Platform, StyleSheet } from "react-native";
 
-import { useAuth } from "@/context/AuthContext";
 import { colors } from "@/theme";
 
 export default function TabsLayout() {
-  const { role } = useAuth();
-
-  // Ticket validation RPC only allows partners (not admins). Hide Scan for
-  // everyone else until brand impersonation exists on mobile.
-  const canScan = role === "partner";
-
   return (
     <Tabs
       screenOptions={{
@@ -27,6 +20,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: "Home",
+          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="deals"
+        options={{
           title: "Deals",
           tabBarIcon: ({ color, size }) => (
             <Sparkles color={color} size={size} />
@@ -34,11 +34,12 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="scanner"
+        name="events"
         options={{
-          title: "Scan",
-          href: canScan ? "/scanner" : null,
-          tabBarIcon: ({ color, size }) => <QrCode color={color} size={size} />,
+          title: "Events",
+          tabBarIcon: ({ color, size }) => (
+            <CalendarDays color={color} size={size} />
+          ),
         }}
       />
       <Tabs.Screen

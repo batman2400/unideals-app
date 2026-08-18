@@ -31,6 +31,7 @@ import {
 
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { getPasswordResetRedirectUrl } from "@/lib/authDeepLink";
+import { signInWithGoogle as startGoogleSignIn } from "@/lib/googleAuth";
 import { isUserRole, type UserMetadata, type UserRole } from "@/types/database";
 
 interface UserRoleLookup {
@@ -59,6 +60,11 @@ export interface AuthContextValue {
   /** Mirrors `user_roles.is_verified` — student verification status. */
   isVerified: boolean;
   isAuthenticated: boolean;
+  /**
+   * `true` only after a password-recovery deep link / `PASSWORD_RECOVERY`
+   * auth event. Used so the reset screen is not treated as the app home.
+   */
+  isPasswordRecovery: boolean;
   /** Last role-resolution error, surfaced for diagnostics. */
   error: string | null;
   /** Convenience view over `auth.users.user_metadata`. */
@@ -69,8 +75,12 @@ export interface AuthContextValue {
     password: string,
     details: SignUpDetails,
   ) => Promise<AuthResult>;
+  signInWithGoogle: () => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
+  /** Marks the session as a password-recovery flow (from deep link). */
+  beginPasswordRecovery: () => void;
+  clearPasswordRecovery: () => void;
   refreshRole: () => void;
 }
 
@@ -83,10 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(null);
   const [isVerified, setIsVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const hasResolvedOnceRef = useRef(false);
+  const resolvedForUserIdRef = useRef<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const channelUserIdRef = useRef<string | null>(null);
 
@@ -126,8 +137,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw rpcResponse.error;
       }
 
+      const resolvedRole = rpcRole ?? rowRole;
+      if (resolvedRole) {
+        return {
+          role: resolvedRole,
+          isVerified: rowResponse.data?.is_verified === true,
+        };
+      }
+
+      // No role from either source. Default to student only when both queries
+      // succeeded and the user has no row yet — never on a fetch error.
+      if (rpcResponse.error || rowResponse.error) {
+        throw (
+          rpcResponse.error ??
+          rowResponse.error ??
+          new Error("Failed to load user role.")
+        );
+      }
+
       return {
-        role: rpcRole ?? rowRole ?? DEFAULT_ROLE,
+        role: DEFAULT_ROLE,
         isVerified: rowResponse.data?.is_verified === true,
       };
     };
@@ -169,12 +198,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ): Promise<void> => {
       if (!active) return;
 
-      if (!isBackgroundRefresh && !hasResolvedOnceRef.current) {
-        setIsLoading(true);
-      }
-      setError(null);
-
       try {
+        setError(null);
+
         let nextSession = sessionOverride;
 
         if (!nextSession) {
@@ -186,6 +212,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (!active) return;
 
+        const nextUserId = nextSession?.user?.id ?? null;
+        const sessionChanged = resolvedForUserIdRef.current !== nextUserId;
+
+        // Hold the splash until this session's role is known — including
+        // re-login after a previous user already resolved once.
+        if (!isBackgroundRefresh && sessionChanged) {
+          setIsLoading(true);
+        }
+
         setSession(nextSession);
 
         const nextUser = nextSession?.user ?? null;
@@ -194,7 +229,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!nextUser) {
           setRole(null);
           setIsVerified(false);
+          resolvedForUserIdRef.current = null;
           return;
+        }
+
+        if (sessionChanged) {
+          setRole(null);
+          setIsVerified(false);
         }
 
         const resolved = await readRole(nextUser.id);
@@ -202,6 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setRole(resolved.role);
         setIsVerified(resolved.isVerified);
+        resolvedForUserIdRef.current = nextUser.id;
       } catch (caught) {
         if (!active) return;
         // Keep the last known role on transient failures so the UI does not
@@ -209,7 +251,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(toErrorMessage(caught, "Failed to load user role."));
       } finally {
         if (active) {
-          hasResolvedOnceRef.current = true;
           setIsLoading(false);
         }
       }
@@ -221,6 +262,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, nextSession: Session | null) => {
+        if (event === "PASSWORD_RECOVERY") {
+          setIsPasswordRecovery(true);
+        } else if (event === "SIGNED_OUT") {
+          setIsPasswordRecovery(false);
+        }
+
         const isBackground =
           event === "TOKEN_REFRESHED" || event === "USER_UPDATED";
         void resolve(nextSession, isBackground);
@@ -280,8 +327,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
+    return startGoogleSignIn();
+  }, []);
+
   const signOut = useCallback(async (): Promise<AuthResult> => {
     const { error: signOutError } = await supabase.auth.signOut();
+    setIsPasswordRecovery(false);
 
     return {
       error: signOutError
@@ -306,6 +358,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const beginPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(true);
+  }, []);
+
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false);
+  }, []);
+
   const user = session?.user ?? null;
 
   const value = useMemo<AuthContextValue>(
@@ -316,12 +376,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isVerified,
       isAuthenticated: user !== null,
+      isPasswordRecovery,
       error,
       metadata: (user?.user_metadata ?? {}) as UserMetadata,
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
       resetPassword,
+      beginPasswordRecovery,
+      clearPasswordRecovery,
       refreshRole,
     }),
     [
@@ -330,11 +394,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       isLoading,
       isVerified,
+      isPasswordRecovery,
       error,
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
       resetPassword,
+      beginPasswordRecovery,
+      clearPasswordRecovery,
       refreshRole,
     ],
   );

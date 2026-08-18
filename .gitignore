@@ -3,6 +3,8 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
+android/
+ios/
 
 *.orig.*
 *.jks
@@ -19,3 +21,4 @@ npm-debug.*
 yarn-error.*
 
 .DS_Store
+.idea/

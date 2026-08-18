@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   BadgeCheck,
   CheckCircle2,
+  Clock,
   Store,
   Ticket,
 } from "lucide-react-native";
@@ -19,9 +20,15 @@ import {
 import QRCode from "react-native-qrcode-svg";
 
 import { Button } from "@/components/Button";
+import { SaveDealButton } from "@/components/DealCard";
 import { useAuth } from "@/context/AuthContext";
+import { formatLaunchDate, isComingSoonDeal, isExpiredDeal } from "@/lib/eventTiming";
+import { asHttpUrl } from "@/lib/httpUrl";
+import { asRouteId } from "@/lib/routeParams";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { useDeal } from "@/lib/useDeals";
+import { useSavedDeals } from "@/lib/useSavedDeals";
+import { useStudentVerificationRequest } from "@/lib/useVerificationRequest";
 import { colors, radius, spacing } from "@/theme";
 import {
   TICKET_URI_PREFIX,
@@ -32,9 +39,10 @@ import {
 const TICKET_DURATION_MINUTES = 10;
 
 export default function DealDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = asRouteId(rawId);
   const router = useRouter();
-  const { isAuthenticated, isVerified, role } = useAuth();
+  const { isAuthenticated, isVerified, role, user } = useAuth();
 
   const accessKey = [
     isAuthenticated ? "auth" : "anon",
@@ -42,12 +50,19 @@ export default function DealDetailScreen() {
     isVerified ? "verified" : "unverified",
   ].join(":");
 
-  const { deal, isLoading, error } = useDeal(id, accessKey);
+  const { deal, isLoading, error } = useDeal(id || undefined, accessKey);
+  const { savedIds, isLoading: savedLoading, toggleSave } = useSavedDeals();
+  const dealId = Number(id);
+  const isSaved = Number.isFinite(dealId) && savedIds.has(dealId);
 
   const isPrivilegedRole = role === "admin" || role === "partner";
   const canRevealRedemption =
     isPrivilegedRole || (isAuthenticated && isVerified);
   const showVerificationWall = !canRevealRedemption;
+  const { isInFlight } = useStudentVerificationRequest(
+    user?.id,
+    Boolean(showVerificationWall && isAuthenticated),
+  );
 
   if (isLoading) {
     return (
@@ -75,17 +90,27 @@ export default function DealDetailScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {deal.imageUrl ? (
-        <Image
-          source={{ uri: deal.imageUrl }}
-          style={styles.hero}
-          contentFit="cover"
-        />
-      ) : (
-        <View style={[styles.hero, styles.heroFallback]}>
-          <Ticket color={colors.primary} size={40} />
+      <View style={styles.heroWrap}>
+        {deal.imageUrl ? (
+          <Image
+            source={{ uri: deal.imageUrl }}
+            style={styles.hero}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.hero, styles.heroFallback]}>
+            <Ticket color={colors.primary} size={40} />
+          </View>
+        )}
+        <View style={styles.heroSave}>
+          <SaveDealButton
+            saved={isSaved}
+            disabled={savedLoading}
+            variant="overlay"
+            onPress={() => void toggleSave(deal.id)}
+          />
         </View>
-      )}
+      </View>
 
       <View style={styles.body}>
         <Text style={styles.brand}>{deal.brand}</Text>
@@ -101,11 +126,14 @@ export default function DealDetailScreen() {
           <Text style={styles.description}>{deal.description}</Text>
         ) : null}
 
-        {showVerificationWall ? (
+        {isExpiredDeal(deal) ? (
+          <ScheduleWall kind="ended" />
+        ) : isComingSoonDeal(deal) ? (
+          <ScheduleWall kind="coming_soon" launchAt={deal.startTime} />
+        ) : showVerificationWall ? (
           <VerificationWall
-            isAuthenticated={isAuthenticated}
+            isPending={isInFlight}
             onVerify={() => router.push("/profile")}
-            onSignIn={() => router.replace("/login")}
           />
         ) : deal.type === "In-Store" ? (
           <InStoreRedemption dealId={deal.id} />
@@ -121,14 +149,44 @@ export default function DealDetailScreen() {
   );
 }
 
-function VerificationWall({
-  isAuthenticated,
-  onVerify,
-  onSignIn,
+function ScheduleWall({
+  kind,
+  launchAt,
 }: {
-  isAuthenticated: boolean;
+  kind: "coming_soon" | "ended";
+  launchAt?: string | null;
+}) {
+  if (kind === "ended") {
+    return (
+      <View style={styles.endedWall}>
+        <Text style={styles.endedTitle}>This offer has ended</Text>
+        <Text style={styles.endedBody}>
+          Redemption is no longer available. You can still browse the details.
+        </Text>
+      </View>
+    );
+  }
+
+  const when = formatLaunchDate(launchAt);
+  return (
+    <View style={styles.wall}>
+      <Clock color={colors.onPrimaryContainer} size={22} />
+      <Text style={styles.wallTitle}>Coming soon</Text>
+      <Text style={styles.wallBody}>
+        {when
+          ? `This offer launches ${when}. Redemption opens then.`
+          : "This offer is not live yet. Redemption opens when it launches."}
+      </Text>
+    </View>
+  );
+}
+
+function VerificationWall({
+  isPending,
+  onVerify,
+}: {
+  isPending: boolean;
   onVerify: () => void;
-  onSignIn: () => void;
 }) {
   return (
     <View style={styles.wall}>
@@ -139,8 +197,8 @@ function VerificationWall({
         tickets.
       </Text>
       <Button
-        label={isAuthenticated ? "Go to verification" : "Sign in to continue"}
-        onPress={isAuthenticated ? onVerify : onSignIn}
+        label={isPending ? "Verification pending" : "Go to verification"}
+        onPress={onVerify}
       />
     </View>
   );
@@ -157,12 +215,18 @@ function OnlineRedemption({
 }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [logNotice, setLogNotice] = useState<string | null>(null);
+  const safeStoreUrl = asHttpUrl(storeUrl);
 
   const logEvent = useCallback(async (eventType: OnlineCodeEventType) => {
-    await supabase.rpc("log_online_code_event", {
+    const { error } = await supabase.rpc("log_online_code_event", {
       target_deal_id: dealId,
       target_event_type: eventType,
     });
+    if (error) {
+      console.warn("log_online_code_event failed", error);
+      setLogNotice("Could not record this action. Your code still works.");
+    }
   }, [dealId]);
 
   const handleReveal = useCallback(() => {
@@ -179,10 +243,10 @@ function OnlineRedemption({
   }, [code, logEvent]);
 
   const handleStore = useCallback(async () => {
-    if (!storeUrl) return;
+    if (!safeStoreUrl) return;
     void logEvent("click_through");
-    await Linking.openURL(storeUrl);
-  }, [storeUrl, logEvent]);
+    await Linking.openURL(safeStoreUrl);
+  }, [safeStoreUrl, logEvent]);
 
   if (!code) {
     return (
@@ -211,7 +275,7 @@ function OnlineRedemption({
               onPress={() => void handleCopy()}
               style={styles.flexBtn}
             />
-            {storeUrl ? (
+            {safeStoreUrl ? (
               <Button
                 label="Go to store"
                 variant="ghost"
@@ -220,6 +284,9 @@ function OnlineRedemption({
               />
             ) : null}
           </View>
+          {logNotice ? (
+            <Text style={styles.errorInline}>{logNotice}</Text>
+          ) : null}
         </>
       )}
     </View>
@@ -234,9 +301,10 @@ function InStoreRedemption({ dealId }: { dealId: number }) {
   const [alreadyActive, setAlreadyActive] = useState(false);
   const [alreadyRedeemed, setAlreadyRedeemed] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [ticketWindowMs, setTicketWindowMs] = useState(
+    TICKET_DURATION_MINUTES * 60 * 1000,
+  );
   const activeRef = useRef(true);
-
-  const totalSeconds = TICKET_DURATION_MINUTES * 60;
 
   const generate = useCallback(async () => {
     setIsGenerating(true);
@@ -267,8 +335,12 @@ function InStoreRedemption({ dealId }: { dealId: number }) {
     }
 
     setTicketCode(row.ticket_code);
-    setExpiresAt(new Date(row.expires_at));
+    const expires = new Date(row.expires_at);
+    setExpiresAt(expires);
     setAlreadyActive(row.already_active);
+    const remainingMs = Math.max(0, expires.getTime() - Date.now());
+    const fallbackMs = TICKET_DURATION_MINUTES * 60 * 1000;
+    setTicketWindowMs(remainingMs || fallbackMs);
     setIsGenerating(false);
   }, [dealId]);
 
@@ -341,9 +413,14 @@ function InStoreRedemption({ dealId }: { dealId: number }) {
 
   const expired = Boolean(ticketCode && !alreadyRedeemed && secondsLeft <= 0);
   const progress = useMemo(() => {
-    if (!ticketCode || alreadyRedeemed) return 0;
-    return Math.min(1, secondsLeft / totalSeconds);
-  }, [ticketCode, alreadyRedeemed, secondsLeft, totalSeconds]);
+    if (!ticketCode || alreadyRedeemed || !expiresAt) return 0;
+    const remainingMs = Math.max(0, expiresAt.getTime() - Date.now());
+    const windowMs =
+      ticketWindowMs > 0
+        ? ticketWindowMs
+        : TICKET_DURATION_MINUTES * 60 * 1000;
+    return Math.min(1, remainingMs / windowMs);
+  }, [ticketCode, alreadyRedeemed, expiresAt, secondsLeft, ticketWindowMs]);
 
   const qrValue = ticketCode ? `${TICKET_URI_PREFIX}${ticketCode}` : "";
 
@@ -444,10 +521,19 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     backgroundColor: colors.background,
   },
+  heroWrap: {
+    position: "relative",
+  },
   hero: {
     width: "100%",
     height: 220,
     backgroundColor: colors.surfaceContainer,
+  },
+  heroSave: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    zIndex: 2,
   },
   heroFallback: {
     alignItems: "center",
@@ -519,6 +605,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.onPrimaryContainer,
+  },
+  endedWall: {
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceContainer,
+  },
+  endedTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.onBackground,
+  },
+  endedBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.onSurfaceVariant,
   },
   panel: {
     gap: spacing.md,

@@ -24,7 +24,13 @@ type Status = "checking" | "ready" | "done" | "invalid";
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, isLoading } = useAuth();
+  const {
+    isAuthenticated,
+    isLoading,
+    isPasswordRecovery,
+    clearPasswordRecovery,
+    signOut,
+  } = useAuth();
   const params = useLocalSearchParams<{ error?: string }>();
 
   const [status, setStatus] = useState<Status>("checking");
@@ -42,22 +48,51 @@ export default function ResetPasswordScreen() {
       return;
     }
 
+    // Stay on the success / error screens until the user chooses a CTA.
+    // Clearing recovery while authenticated would otherwise replace("/")
+    // before "Password updated" can render.
+    if (status === "done") {
+      if (isAuthenticated && !isPasswordRecovery) {
+        router.replace("/");
+      }
+      return;
+    }
+
+    if (status === "invalid") {
+      return;
+    }
+
     if (isLoading) return;
 
-    if (isAuthenticated) {
+    // Accidental landings (logout fallback / Fast Refresh) must not show
+    // the update-password form for a normal session.
+    if (isAuthenticated && !isPasswordRecovery) {
+      router.replace("/");
+      return;
+    }
+
+    if (isAuthenticated && isPasswordRecovery) {
       setStatus("ready");
       return;
     }
 
-    const timeout = setTimeout(() => {
-      setStatus("invalid");
-      setError(
-        "This reset link is invalid or has expired. Request a new one from the sign-in screen.",
-      );
-    }, 10_000);
+    if (!isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [
+    isAuthenticated,
+    isLoading,
+    isPasswordRecovery,
+    params.error,
+    router,
+    status,
+  ]);
 
-    return () => clearTimeout(timeout);
-  }, [isAuthenticated, isLoading, params.error]);
+  // Recovery error + live session: sign out so "(auth)/login" can mount.
+  useEffect(() => {
+    if (status !== "invalid" || !isAuthenticated || isLoading) return;
+    void signOut();
+  }, [status, isAuthenticated, isLoading, signOut]);
 
   const handleSubmit = useCallback(async () => {
     const strengthError = validatePasswordStrength(password);
@@ -88,6 +123,19 @@ export default function ResetPasswordScreen() {
     setIsSubmitting(false);
   }, [password, confirm]);
 
+  const handleGoToDeals = useCallback(() => {
+    clearPasswordRecovery();
+  }, [clearPasswordRecovery]);
+
+  const handleBackToSignIn = useCallback(async () => {
+    if (isAuthenticated) {
+      await signOut();
+    } else {
+      clearPasswordRecovery();
+    }
+    router.replace("/login");
+  }, [isAuthenticated, signOut, clearPasswordRecovery, router]);
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -112,7 +160,7 @@ export default function ResetPasswordScreen() {
         {status === "invalid" ? (
           <>
             <Text style={styles.error}>{error}</Text>
-            <Button label="Back to sign in" onPress={() => router.replace("/login")} />
+            <Button label="Back to sign in" onPress={() => void handleBackToSignIn()} />
           </>
         ) : null}
 
@@ -121,7 +169,7 @@ export default function ResetPasswordScreen() {
             <Text style={styles.notice}>
               Password updated. You can continue using Uni Deals.
             </Text>
-            <Button label="Go to deals" onPress={() => router.replace("/")} />
+            <Button label="Go to deals" onPress={handleGoToDeals} />
           </>
         ) : null}
 

@@ -1,14 +1,18 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import { useFocusEffect } from "expo-router";
 import {
   CheckCircle2,
   Keyboard as KeyboardIcon,
   QrCode,
-  ShieldAlert,
   XCircle,
 } from "lucide-react-native";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  AppState,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,13 +20,14 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { Button } from "@/components/Button";
-import { useAuth } from "@/context/AuthContext";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
-import type { ScanResult, ValidateTicketRow } from "@/types/database";
+import {
+  STUDENT_PASS_URI_PREFIX,
+  type ScanResult,
+  type ValidateTicketRow,
+} from "@/types/database";
 
 /** Cooldown between accepted camera reads so one QR does not fire repeatedly. */
 const SCAN_COOLDOWN_MS = 2500;
@@ -35,9 +40,7 @@ interface ScanLogEntry {
   time: string;
 }
 
-export default function ScannerScreen() {
-  const { role } = useAuth();
-  const insets = useSafeAreaInsets();
+export default function PartnerScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -48,57 +51,83 @@ export default function ScannerScreen() {
   const [history, setHistory] = useState<ScanLogEntry[]>([]);
 
   const lastScanAtRef = useRef(0);
+  const verifyingRef = useRef(false);
 
   const validate = useCallback(
     async (payload: string, method: "camera" | "manual") => {
       const trimmed = payload.trim();
-      if (!trimmed || isVerifying) return;
+      if (!trimmed || verifyingRef.current) return;
 
+      if (trimmed.toLowerCase().startsWith(STUDENT_PASS_URI_PREFIX)) {
+        setOutcome(null);
+        setError(
+          "This is a Student Pass QR — not a redemption ticket. Ask the student to open the deal and generate an in-store ticket.",
+        );
+        return;
+      }
+
+      verifyingRef.current = true;
       setIsVerifying(true);
       setError(null);
       setOutcome(null);
 
-      const { data, error: rpcError } = await supabase.rpc(
-        "validate_instore_ticket",
-        { scanned_payload: trimmed, scan_method: method },
-      );
-
-      if (rpcError) {
-        setError(toErrorMessage(rpcError, "Verification failed. Try again."));
-        setIsVerifying(false);
-        return;
-      }
-
-      const row = (data as ValidateTicketRow[] | null)?.[0] ?? null;
-
-      if (!row) {
-        setError("Unexpected response from the server.");
-        setIsVerifying(false);
-        return;
-      }
-
-      setOutcome(row);
-
-      if (SUCCESS_RESULTS.includes(row.result) && row.deal_title) {
-        setHistory((previous) =>
-          [
-            {
-              key: `${row.ticket_id ?? row.event_id ?? Date.now()}-${Date.now()}`,
-              title: row.deal_title as string,
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            },
-            ...previous,
-          ].slice(0, 5),
+      try {
+        const { data, error: rpcError } = await supabase.rpc(
+          "validate_instore_ticket",
+          { scanned_payload: trimmed, scan_method: method },
         );
-      }
 
-      setIsVerifying(false);
+        if (rpcError) {
+          setError(toErrorMessage(rpcError, "Verification failed. Try again."));
+          return;
+        }
+
+        const row = (data as ValidateTicketRow[] | null)?.[0] ?? null;
+
+        if (!row) {
+          setError("Unexpected response from the server.");
+          return;
+        }
+
+        setOutcome(row);
+
+        if (SUCCESS_RESULTS.includes(row.result) && row.deal_title) {
+          setHistory((previous) =>
+            [
+              {
+                key: `${row.ticket_id ?? row.event_id ?? Date.now()}-${Date.now()}`,
+                title: row.deal_title as string,
+                time: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              },
+              ...previous,
+            ].slice(0, 5),
+          );
+        }
+      } finally {
+        verifyingRef.current = false;
+        setIsVerifying(false);
+      }
     },
-    [isVerifying],
+    [],
   );
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setIsCameraOpen(false);
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next !== "active") setIsCameraOpen(false);
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleBarcodeScanned = useCallback(
     (scan: BarcodeScanningResult) => {
@@ -128,33 +157,18 @@ export default function ScannerScreen() {
     setIsCameraOpen(true);
   }, [permission, requestPermission]);
 
-  if (role !== "partner") {
-    return (
-      <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <ShieldAlert color={colors.onSurfaceVariant} size={32} />
-        <Text style={styles.gateTitle}>Partners only</Text>
-        <Text style={styles.gateBody}>
-          Ticket scanning is available to brand partners validating in-store
-          redemptions at the register.
-          {role === "admin"
-            ? " Admin scanning requires brand impersonation, which is web-only for now."
-            : ""}
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.root}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + spacing.lg },
-      ]}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+    <ScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Scan a ticket</Text>
         <Text style={styles.subtitle}>
           Point the camera at the student&apos;s QR code, or type the UD- code
           shown on their screen.
@@ -249,7 +263,20 @@ export default function ScannerScreen() {
           ))}
           <Pressable
             accessibilityRole="button"
-            onPress={() => setHistory([])}
+            onPress={() => {
+              Alert.alert(
+                "Clear history",
+                "Remove recent redemptions from this list?",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Clear",
+                    style: "destructive",
+                    onPress: () => setHistory([]),
+                  },
+                ],
+              );
+            }}
             style={styles.clearHistory}
           >
             <Text style={styles.clearHistoryLabel}>Clear</Text>
@@ -257,6 +284,7 @@ export default function ScannerScreen() {
         </View>
       ) : null}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -316,27 +344,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  flex: {
+    flex: 1,
+  },
   content: {
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
-  },
-  centered: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xxl,
-  },
-  gateTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.onBackground,
-  },
-  gateBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: "center",
-    color: colors.onSurfaceVariant,
   },
   header: {
     gap: spacing.xs,

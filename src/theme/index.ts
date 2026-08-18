@@ -47,6 +47,10 @@ export const colors = {
   onErrorContainer: "#752121",
 
   warning: "#d4a017",
+  info: "#0284c7",
+  infoContainer: "#dbeafe",
+  onInfo: "#ffffff",
+  onInfoContainer: "#1d4ed8",
   white: "#ffffff",
 } as const;
 

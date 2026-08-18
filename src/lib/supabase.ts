@@ -42,6 +42,10 @@ const looksConfigured = Boolean(
 
 export const isSupabaseConfigured = looksConfigured;
 
+// AsyncStorage touches `window` under the hood; skip it during SSR / Node
+// (e.g. Expo static web render) so Metro doesn't crash on start.
+const canUseNativeStorage = typeof window !== "undefined";
+
 if (!isSupabaseConfigured) {
   console.error(
     "[supabase] Missing environment variables. Ensure EXPO_PUBLIC_SUPABASE_URL " +
@@ -54,9 +58,10 @@ export const supabase: SupabaseClient = createClient(
   supabaseAnonKey ?? "placeholder-anon-key",
   {
     auth: {
-      storage: AsyncStorage,
+      ...(canUseNativeStorage ? { storage: AsyncStorage } : {}),
       autoRefreshToken: true,
-      persistSession: true,
+      persistSession: canUseNativeStorage,
+      flowType: "pkce",
       // There is no URL fragment to parse in a native runtime; deep-linked
       // auth callbacks are handled explicitly instead.
       detectSessionInUrl: false,
@@ -74,9 +79,11 @@ function handleAppStateChange(state: AppStateStatus): void {
   }
 }
 
-AppState.addEventListener("change", handleAppStateChange);
-if (isSupabaseConfigured) {
-  handleAppStateChange(AppState.currentState);
+if (canUseNativeStorage) {
+  AppState.addEventListener("change", handleAppStateChange);
+  if (isSupabaseConfigured) {
+    handleAppStateChange(AppState.currentState);
+  }
 }
 
 /** Normalizes the various error shapes Supabase can surface into a message. */

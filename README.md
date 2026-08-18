@@ -9,7 +9,12 @@ without changes.
 ## Requirements
 
 - Node.js 20 or newer
-- The Expo Go app, or a development build, on a phone or simulator
+- An Expo account ([expo.dev](https://expo.dev)) for EAS cloud builds
+- A **custom development build** on your phone (recommended), or Expo Go for quick UI-only checks
+
+Native modules such as `expo-camera` (and future push notifications / deep-link
+integrations) work most reliably in a custom development client built with EAS
+— not Expo Go.
 
 ## Getting started
 
@@ -17,6 +22,32 @@ without changes.
 cd unideals-app
 npm install
 cp .env.example .env   # then fill in the values
+```
+
+### Recommended: custom development build (EAS)
+
+One-time setup (login is interactive in your terminal):
+
+```bash
+npm install -g eas-cli   # if needed
+eas login
+eas build:configure      # links the project; eas.json is already present
+npm run build:dev:android
+```
+
+When the cloud build finishes, install the APK from the EAS link/QR on your
+Android phone. Day-to-day:
+
+```bash
+npm run start:dev-client
+```
+
+Open the Uni Deals development app on your phone — it connects to Metro like
+Expo Go, but with your native modules compiled in.
+
+### Quick local start (Expo Go)
+
+```bash
 npm start
 ```
 
@@ -36,16 +67,32 @@ The values are identical — same Supabase project, same anon key.
 
 ```
 app/                       Expo Router file-based routes
-  _layout.tsx              AuthProvider + navigation guard
+  _layout.tsx              AuthProvider + Stack.Protected (auth / tabs / portals)
   (auth)/login.tsx         Sign in / create account
-  (tabs)/_layout.tsx       Bottom tab bar (Scan tab is partner-only)
-  (tabs)/index.tsx         Explore Deals feed
-  (tabs)/scanner.tsx       Partner QR ticket scanner
-  (tabs)/profile.tsx       Profile + Digital Student Pass
+  (tabs)/_layout.tsx       Shared tabs: Home, Deals, Events, Profile
+  (tabs)/index.tsx         Home — curated deals + events
+  (tabs)/deals.tsx         Full searchable deals grid
+  (tabs)/events.tsx        Campus events (All / Current / Coming Soon)
+  (tabs)/profile.tsx       Profile + Student Pass or Open Portal card
+  deal/[id].tsx            Deal detail
+  event/[id].tsx           Event detail
+  saved.tsx                Bookmarked deals
+  edit-profile.tsx         Name, avatar, academic details
+  contact.tsx              Inquiry form (writes to `inquiries`)
+  help.tsx                 FAQ + email / contact shortcuts
+  terms.tsx / privacy.tsx  In-app legal copy (same as the website)
+  create-event.tsx         Submit event (any authenticated role)
+  create-deal.tsx          Partner create deal (modal)
+  edit-deal/[id].tsx       Partner edit deal (modal)
+  partner/*                Partner portal (dashboard, deals, scanner, analytics, brand profile)
+  admin/*                  Admin portal (moderation, content, system tools)
 src/
   lib/supabase.ts          Supabase client (AsyncStorage session persistence)
   lib/useDeals.ts          get_public_deals() reader
+  lib/useEvents.ts         Approved events reader
+  lib/useAdmin*.ts         Admin overview / deals / users / events / content hooks
   context/AuthContext.tsx  session, role, verification state
+  screens/ProfileScreen.tsx Shared profile body + portal card slot
   components/              Shared UI primitives
   theme/                   Design tokens ported from tailwind.config.js
   types/database.ts        Schema + RPC types
@@ -64,35 +111,44 @@ src/
 
 Roles are `student`, `partner`, and `admin`, defaulting to `student`.
 
-### Navigation guard
+### Navigation
 
-The root layout redirects unauthenticated users to `/login` and pushes
-authenticated users out of the `(auth)` group back to `/`. The splash screen
-stays up until the first session and role resolution finishes, so the app never
-flashes the login screen for a user who is already signed in.
+Root layout uses nested `Stack.Protected`: unauthenticated users stay in
+`(auth)`; authenticated users get shared tabs plus deal/event routes. Partner
+and admin portal stacks are role-guarded. Opening a portal from Profile pushes
+a full-screen stack (no bottom tabs). Event submission is open to every signed-in
+role via the Events tab; admins moderate events in-portal and do not get a
+separate Create Event menu item.
 
 ### Deals
 
 The feed reads the `get_public_deals()` RPC, which returns only `approved`
 deals and deliberately omits `redemption_code`. Codes and in-store tickets are
 issued per-deal through `get_public_deal_by_id()` and
-`generate_instore_ticket()`.
+`generate_instore_ticket()`. Partners manage their catalogue under
+`/partner/deals` (create/edit/delete).
 
 ### Scanner
 
-Partner accounts get a Scan tab that reads `unideals://ticket/<code>` QR codes
-with `expo-camera`, or accepts a typed `UD-XXXXXX` code, and validates both
-through the `validate_instore_ticket()` RPC. Students and admins never see the
-tab (admin scanning still requires brand impersonation on the web).
+Partners open the scanner from the Partner Portal hero action
+(`/partner/scanner`). It reads `unideals://ticket/<code>` QR codes with
+`expo-camera`, or accepts a typed `UD-XXXXXX` code, and validates both through
+`validate_instore_ticket()`.
 
 ### Deal detail & verification
 
 - `/deal/[id]` — online code reveal (`log_online_code_event`) and in-store
   ticket QR (`generate_instore_ticket`, 10-minute expiry, realtime redeem).
-- Profile — university OTP via `send-verification-otp` +
-  `confirm_university_verification`, plus manual ID upload to
-  `verification-documents` / `submit_manual_verification`.
+- Profile — students get university OTP / manual verification; partners and
+  admins get an Open Portal card instead of the Student Pass.
 
+### Portals
+
+- **Partner:** dashboard stats, My Deals CRUD, scanner, analytics
+  (`get_partner_deal_stats`).
+- **Admin:** dashboard overview, verifications, all deals, users, events /
+  pending events, inquiries, blog manager, brands, analytics (including recent
+  scan activity).
 ## Branding
 
 Tokens live in `src/theme/index.ts` and mirror the web app's Material palette.
@@ -106,16 +162,33 @@ Tokens live in `src/theme/index.ts` and mirror the web app's Material palette.
 | On background     | `#323233` |
 | Error             | `#9f403d` |
 
-## Deep links / password reset
+## Deep links / password reset / Google sign-in
 
-Password-reset emails redirect to `unideals://reset-password` (via
-`Linking.createURL('reset-password')`). Add that exact redirect URL (and your
-Expo Go `exp://…` URL during development) under **Authentication → URL
-Configuration → Redirect URLs** in the Supabase dashboard.
+Password-reset emails redirect to `unideals://reset-password`. Google sign-in
+returns to `unideals://auth/callback`. Add **all** of these under
+**Authentication → URL Configuration → Redirect URLs** in the Supabase dashboard:
+
+- `https://www.unideals.co/auth/callback`
+- `https://unideals.co/auth/callback`
+- `http://localhost:5173/auth/callback` (web local)
+- `unideals://auth/callback`
+- `unideals://reset-password`
+- `exp://**` (Expo Go during development)
+
+### Enable Google in Supabase
+
+1. In [Google Cloud Console](https://console.cloud.google.com/auth/clients) create
+   an OAuth client of type **Web application**.
+2. Authorized JavaScript origins: `https://www.unideals.co`,
+   `https://unideals.co`, `http://localhost:5173`.
+3. Authorized redirect URI:
+   `https://<YOUR-PROJECT-REF>.supabase.co/auth/v1/callback`
+   (copy this from **Authentication → Providers → Google** in Supabase).
+4. Paste the Client ID and Client Secret into that Google provider page and
+   enable it.
 
 ## Still web-first / not ported
 
-- Saved deals, categories, and brand directory
-- Profile editing / avatar upload
-- Events hub, blog, support
-- Partner deal CRUD / analytics and full admin panel
+- Student-facing blog reader (website only — admin Blog Manager still publishes to the site)
+- Public brand directory
+- Admin brand impersonation (website only — ops tool for scanning/editing as a specific brand)

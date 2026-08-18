@@ -1,6 +1,7 @@
 import { Eye, EyeOff, Lock, Mail, User } from "lucide-react-native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,9 +11,14 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import {
+  AuthDivider,
+  GoogleSignInButton,
+} from "@/components/GoogleSignInButton";
 import { useAuth } from "@/context/AuthContext";
 import {
   PASSWORD_HINT,
@@ -25,8 +31,9 @@ type Tab = "signin" | "signup";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { signIn, signUp, signInWithGoogle, resetPassword } = useAuth();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ error?: string }>();
 
   const [tab, setTab] = useState<Tab>("signin");
   const [email, setEmail] = useState("");
@@ -35,10 +42,18 @@ export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const isSignUp = tab === "signup";
+  const isBusy = isSubmitting || isGoogleSubmitting;
+
+  useEffect(() => {
+    if (typeof params.error === "string" && params.error) {
+      setError(params.error);
+    }
+  }, [params.error]);
 
   const canSubmit = useMemo(() => {
     if (!EMAIL_PATTERN.test(email.trim())) {
@@ -48,7 +63,7 @@ export default function LoginScreen() {
       if (validatePasswordStrength(password)) return false;
       return fullName.trim().length > 1 && username.trim().length > 1;
     }
-    return password.length >= 6;
+    return password.length >= 8;
   }, [email, password, fullName, username, isSignUp]);
 
   const switchTab = useCallback((next: Tab) => {
@@ -58,7 +73,7 @@ export default function LoginScreen() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit || isSubmitting) return;
+    if (!canSubmit || isBusy) return;
 
     if (isSignUp) {
       const strengthError = validatePasswordStrength(password);
@@ -89,7 +104,7 @@ export default function LoginScreen() {
     setIsSubmitting(false);
   }, [
     canSubmit,
-    isSubmitting,
+    isBusy,
     isSignUp,
     signUp,
     signIn,
@@ -100,6 +115,7 @@ export default function LoginScreen() {
   ]);
 
   const handleForgotPassword = useCallback(async () => {
+    if (isBusy) return;
     if (!EMAIL_PATTERN.test(email.trim())) {
       setError("Enter your email address first, then tap Forgot password.");
       return;
@@ -118,7 +134,23 @@ export default function LoginScreen() {
     }
 
     setIsSubmitting(false);
-  }, [email, resetPassword]);
+  }, [email, isBusy, resetPassword]);
+
+  const handleGoogleSignIn = useCallback(async () => {
+    if (isBusy) return;
+
+    setIsGoogleSubmitting(true);
+    setError(null);
+    setNotice(null);
+
+    const result = await signInWithGoogle();
+
+    if (result.error) {
+      setError(result.error);
+    }
+
+    setIsGoogleSubmitting(false);
+  }, [isBusy, signInWithGoogle]);
 
   return (
     <KeyboardAvoidingView
@@ -133,9 +165,11 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.brandBlock}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoMarkText}>UD</Text>
-          </View>
+          <Image
+            accessibilityLabel="Uni Deals logo"
+            source={require("../../assets/logo.png")}
+            style={styles.logoMark}
+          />
           <Text style={styles.wordmark}>
             Uni<Text style={styles.wordmarkAccent}>Deals</Text>
           </Text>
@@ -168,6 +202,13 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.form}>
+          <GoogleSignInButton
+            onPress={() => void handleGoogleSignIn()}
+            loading={isGoogleSubmitting}
+            disabled={isBusy}
+          />
+          <AuthDivider />
+
           {isSignUp ? (
             <>
               <Field
@@ -236,7 +277,7 @@ export default function LoginScreen() {
           <Button
             label={isSignUp ? "Create account" : "Sign in"}
             onPress={() => void handleSubmit()}
-            disabled={!canSubmit}
+            disabled={!canSubmit || isBusy}
             loading={isSubmitting}
             style={styles.submit}
           />
@@ -323,18 +364,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   logoMark: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.xl,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoMarkText: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -1,
-    color: colors.onPrimary,
+    width: 48,
+    height: 48,
   },
   wordmark: {
     fontSize: 30,

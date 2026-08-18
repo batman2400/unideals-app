@@ -1,5 +1,5 @@
 /**
- * Handles Supabase auth deep links for password recovery (and similar).
+ * Handles Supabase auth deep links for password recovery and OAuth.
  *
  * Web relies on `detectSessionInUrl`. Native sets that to false, so we parse
  * the URL ourselves and either exchange a PKCE `code` or call `setSession`
@@ -13,7 +13,11 @@ export interface AuthDeepLinkResult {
   handled: boolean;
   type: string | null;
   error: string | null;
+  isRecovery: boolean;
 }
+
+/** PKCE codes can only be exchanged once; Linking + AuthSession both fire. */
+let lastConsumedCode: string | null = null;
 
 function parseParams(url: string): Record<string, string> {
   const params: Record<string, string> = {};
@@ -61,40 +65,57 @@ function parseParams(url: string): Record<string, string> {
   return params;
 }
 
+function isRecoveryContext(url: string, type: string | null): boolean {
+  if (type === "recovery") return true;
+  return /reset-password/i.test(url);
+}
+
 export async function handleAuthDeepLink(
   url: string | null | undefined,
 ): Promise<AuthDeepLinkResult> {
   if (!url) {
-    return { handled: false, type: null, error: null };
+    return { handled: false, type: null, error: null, isRecovery: false };
   }
 
   const params = parseParams(url);
+  const type = params.type ?? null;
+  const isRecovery = isRecoveryContext(url, type);
 
   if (params.error || params.error_code) {
     return {
       handled: true,
-      type: params.type ?? null,
+      type,
+      isRecovery,
       error:
         params.error_description?.replace(/\+/g, " ") ||
         params.error ||
-        "This reset link is invalid or has expired.",
+        (isRecovery
+          ? "This reset link is invalid or has expired."
+          : "Google sign-in was cancelled or failed."),
     };
   }
 
   try {
     if (params.code) {
+      if (lastConsumedCode === params.code) {
+        return { handled: true, type, isRecovery, error: null };
+      }
+      lastConsumedCode = params.code;
+
       const { error } = await supabase.auth.exchangeCodeForSession(params.code);
       if (error) {
         return {
           handled: true,
-          type: params.type ?? null,
+          type,
+          isRecovery,
           error: toErrorMessage(error, "Could not complete sign-in from link."),
         };
       }
 
       return {
         handled: true,
-        type: params.type ?? "recovery",
+        type,
+        isRecovery,
         error: null,
       };
     }
@@ -108,29 +129,37 @@ export async function handleAuthDeepLink(
       if (error) {
         return {
           handled: true,
-          type: params.type ?? null,
+          type,
+          isRecovery,
           error: toErrorMessage(error, "Could not restore session from link."),
         };
       }
 
       return {
         handled: true,
-        type: params.type ?? "recovery",
+        type,
+        isRecovery,
         error: null,
       };
     }
   } catch (caught) {
     return {
       handled: true,
-      type: params.type ?? null,
+      type,
+      isRecovery,
       error: toErrorMessage(caught, "Could not process authentication link."),
     };
   }
 
-  return { handled: false, type: null, error: null };
+  return { handled: false, type, error: null, isRecovery };
 }
 
 /** Canonical redirect target for password-reset emails. */
 export function getPasswordResetRedirectUrl(): string {
   return Linking.createURL("reset-password");
+}
+
+/** Canonical redirect target for Google (and other OAuth) providers. */
+export function getOAuthRedirectUrl(): string {
+  return Linking.createURL("auth/callback");
 }
