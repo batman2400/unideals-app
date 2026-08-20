@@ -21,6 +21,9 @@ import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 
 type Status = "checking" | "ready" | "done" | "invalid";
 
+/** Wait for the recovery deep-link exchange before bouncing to login. */
+const RECOVERY_WAIT_MS = 8000;
+
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -73,11 +76,6 @@ export default function ResetPasswordScreen() {
 
     if (isAuthenticated && isPasswordRecovery) {
       setStatus("ready");
-      return;
-    }
-
-    if (!isAuthenticated) {
-      router.replace("/login");
     }
   }, [
     isAuthenticated,
@@ -87,6 +85,18 @@ export default function ResetPasswordScreen() {
     router,
     status,
   ]);
+
+  useEffect(() => {
+    if (status !== "checking") return;
+    if (isLoading || isAuthenticated) return;
+    if (typeof params.error === "string" && params.error) return;
+
+    const timer = setTimeout(() => {
+      router.replace("/login");
+    }, RECOVERY_WAIT_MS);
+
+    return () => clearTimeout(timer);
+  }, [status, isLoading, isAuthenticated, params.error, router]);
 
   // Recovery error + live session: sign out so "(auth)/login" can mount.
   useEffect(() => {

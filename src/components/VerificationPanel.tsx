@@ -120,7 +120,7 @@ export function VerificationPanel({
             {renewal
               ? expiresOn
                 ? `Student status is valid for 12 months. Re-verify by ${expiresOn} to keep deal codes and in-store tickets.`
-                : "Student status is valid for 12 months. Re-verify to keep deal codes and in-store tickets."
+                : "Student status expired. Re-verify to keep deal codes and in-store tickets."
               : "Verify your student status to unlock deal codes and in-store tickets. Status is valid for 12 months."}
           </Text>
         )}

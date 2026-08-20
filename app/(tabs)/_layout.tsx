@@ -8,33 +8,51 @@ import { colors } from "@/theme";
 export default function TabsLayout() {
   return (
     <Tabs
+      backBehavior="history"
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: true,
+        tabBarHideOnKeyboard: false,
         sceneStyle: styles.scene,
+        animation: "none",
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <Home
+              color={color}
+              size={size}
+              strokeWidth={focused ? 2.6 : 1.8}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="deals"
         options={{
           title: "Deals",
-          tabBarIcon: ({ color, size }) => <Tag color={color} size={size} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <Tag
+              color={color}
+              size={size}
+              strokeWidth={focused ? 2.6 : 1.8}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="events"
         options={{
           title: "Events",
-          tabBarIcon: ({ color, size }) => (
-            <CalendarDays color={color} size={size} />
+          tabBarIcon: ({ color, focused, size }) => (
+            <CalendarDays
+              color={color}
+              size={size}
+              strokeWidth={focused ? 2.6 : 1.8}
+            />
           ),
         }}
       />
@@ -42,9 +60,20 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <UserRound color={color} size={size} />
+          tabBarIcon: ({ color, focused, size }) => (
+            <UserRound
+              color={color}
+              size={size}
+              strokeWidth={focused ? 2.6 : 1.8}
+            />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          href: null,
+          title: "Search",
         }}
       />
     </Tabs>

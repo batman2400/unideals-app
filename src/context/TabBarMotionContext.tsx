@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type ReactNode,
 } from "react";
 import { Dimensions, Keyboard } from "react-native";
@@ -36,15 +37,16 @@ type TabBarMotionContextValue = {
   collapseTarget: SharedValue<number>;
   lastScrollY: SharedValue<number>;
   morphProgress: SharedValue<number>;
-  chipHidden: SharedValue<number>;
-  searchFieldVisibleSv: SharedValue<number>;
   chipX: SharedValue<number>;
   chipY: SharedValue<number>;
   chipW: SharedValue<number>;
   chipH: SharedValue<number>;
   searchFieldVisible: boolean;
+  lastTabRef: MutableRefObject<string>;
+  cacheChipLayout: (layout: MeasuredLayout) => void;
   openSearch: (layout?: MeasuredLayout | null, options?: OpenSearchOptions) => void;
-  closeSearch: (onFinished: () => void) => void;
+  closeSearchMorph: () => void;
+  leaveSearch: (tabName?: string) => void;
 };
 
 const TabBarMotionContext = createContext<TabBarMotionContextValue | null>(
@@ -52,172 +54,133 @@ const TabBarMotionContext = createContext<TabBarMotionContextValue | null>(
 );
 
 const morphEasing = Easing.bezier(0.22, 1, 0.36, 1);
-const KEYBOARD_HIDE_FALLBACK_MS = 400;
+
+function tabHref(name: string): Href {
+  if (name === "index") return "/" as Href;
+  return `/${name}` as Href;
+}
+
+function isUsableLayout(layout?: MeasuredLayout | null): layout is MeasuredLayout {
+  return !!layout && layout.width > 10 && layout.height > 10;
+}
 
 export function TabBarMotionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const closingRef = useRef(false);
-  const closeGenRef = useRef(0);
+  const lastTabRef = useRef("index");
+  const chipLayoutRef = useRef<MeasuredLayout | null>(null);
 
   const collapsed = useSharedValue(0);
   const collapseTarget = useSharedValue(0);
   const lastScrollY = useSharedValue(0);
   const morphProgress = useSharedValue(0);
-  const chipHidden = useSharedValue(0);
-  const searchFieldVisibleSv = useSharedValue(0);
   const chipX = useSharedValue(0);
   const chipY = useSharedValue(0);
-  const chipW = useSharedValue(52);
-  const chipH = useSharedValue(44);
+  const chipW = useSharedValue(128);
+  const chipH = useSharedValue(48);
 
   const [searchFieldVisible, setSearchFieldVisible] = useState(false);
+  const motionGenRef = useRef(0);
+  const searchOpenRef = useRef(false);
 
-  const restoreChip = useCallback(() => {
-    chipHidden.value = 0;
-    searchFieldVisibleSv.value = 0;
-    morphProgress.value = 0;
-    closingRef.current = false;
+  const writeChipFrame = useCallback(
+    (layout: MeasuredLayout) => {
+      chipX.value = layout.x;
+      chipY.value = layout.y;
+      chipW.value = layout.width;
+      chipH.value = layout.height;
+    },
+    [chipH, chipW, chipX, chipY],
+  );
+
+  const resolveChipFrame = useCallback(
+    (layout?: MeasuredLayout | null): MeasuredLayout => {
+      if (isUsableLayout(layout)) return layout;
+      if (isUsableLayout(chipLayoutRef.current)) return chipLayoutRef.current;
+      const window = Dimensions.get("window");
+      return fallbackSearchChipLayout(
+        window.width,
+        window.height,
+        insets.bottom,
+      );
+    },
+    [insets.bottom],
+  );
+
+  const cacheChipLayout = useCallback(
+    (layout: MeasuredLayout) => {
+      if (!isUsableLayout(layout)) return;
+      chipLayoutRef.current = layout;
+      if (morphProgress.value < 0.01) {
+        writeChipFrame(layout);
+      }
+    },
+    [morphProgress, writeChipFrame],
+  );
+
+  const finishOpen = useCallback((gen: number) => {
+    if (motionGenRef.current !== gen) return;
+    setSearchFieldVisible(true);
+  }, []);
+
+  const closeSearchMorph = useCallback(() => {
+    if (!searchOpenRef.current) return;
+    searchOpenRef.current = false;
+    motionGenRef.current += 1;
+    Keyboard.dismiss();
+    writeChipFrame(resolveChipFrame(chipLayoutRef.current));
     setSearchFieldVisible(false);
-  }, [chipHidden, morphProgress, searchFieldVisibleSv]);
+    morphProgress.value = withTiming(0, {
+      duration: SEARCH_MORPH_MS,
+      easing: morphEasing,
+    });
+  }, [morphProgress, resolveChipFrame, writeChipFrame]);
 
   const openSearch = useCallback(
     (layout?: MeasuredLayout | null, options?: OpenSearchOptions) => {
-      if (closingRef.current) return;
-      if (chipHidden.value === 1 && morphProgress.value > 0.05) return;
+      if (searchOpenRef.current && morphProgress.value > 0.98) return;
 
-      const window = Dimensions.get("window");
-      const chip =
-        layout && layout.width > 10
-          ? layout
-          : fallbackSearchChipLayout(
-              window.width,
-              window.height,
-              insets.bottom,
-            );
-
-      chipX.value = chip.x;
-      chipY.value = chip.y;
-      chipW.value = chip.width;
-      chipH.value = chip.height;
-      searchFieldVisibleSv.value = 0;
+      const gen = ++motionGenRef.current;
+      searchOpenRef.current = true;
+      writeChipFrame(resolveChipFrame(layout));
       setSearchFieldVisible(false);
-      chipHidden.value = 1;
-      morphProgress.value = 0;
       morphProgress.value = withTiming(
         1,
         { duration: SEARCH_MORPH_MS, easing: morphEasing },
         (finished) => {
-          if (!finished) {
-            runOnJS(restoreChip)();
-            return;
-          }
-          searchFieldVisibleSv.value = 1;
-          runOnJS(setSearchFieldVisible)(true);
+          if (!finished) return;
+          runOnJS(finishOpen)(gen);
         },
       );
 
       if (options?.scope && options.scope !== "all") {
-        router.push({
+        router.navigate({
           pathname: "/search",
           params: { scope: options.scope },
         } as Href);
       } else {
-        router.push("/search" as Href);
+        router.navigate({
+          pathname: "/search",
+          params: { scope: "all" },
+        } as Href);
       }
     },
     [
-      chipH,
-      chipHidden,
-      chipW,
-      chipX,
-      chipY,
-      insets.bottom,
+      finishOpen,
       morphProgress,
-      restoreChip,
+      resolveChipFrame,
       router,
-      searchFieldVisibleSv,
+      writeChipFrame,
     ],
   );
 
-  const closeSearch = useCallback(
-    (onFinished: () => void) => {
-      if (closingRef.current) return;
-      closingRef.current = true;
-      const gen = ++closeGenRef.current;
-
-      searchFieldVisibleSv.value = 0;
-      setSearchFieldVisible(false);
-      Keyboard.dismiss();
-
-      const state = { morphDone: false, keyboardDone: false, settled: false };
-      let hideSub: ReturnType<typeof Keyboard.addListener> | null = null;
-      let keyboardTimer: ReturnType<typeof setTimeout> | null = null;
-      let failSafe: ReturnType<typeof setTimeout> | null = null;
-
-      const cleanup = () => {
-        hideSub?.remove();
-        hideSub = null;
-        if (keyboardTimer) clearTimeout(keyboardTimer);
-        if (failSafe) clearTimeout(failSafe);
-        keyboardTimer = null;
-        failSafe = null;
-      };
-
-      const settle = () => {
-        if (state.settled || closeGenRef.current !== gen) return;
-        if (!state.morphDone || !state.keyboardDone) return;
-        state.settled = true;
-        cleanup();
-        chipHidden.value = 0;
-        closingRef.current = false;
-        onFinished();
-      };
-
-      const markKeyboardDone = () => {
-        if (closeGenRef.current !== gen) return;
-        state.keyboardDone = true;
-        settle();
-      };
-
-      const markMorphDone = () => {
-        if (closeGenRef.current !== gen) return;
-        state.morphDone = true;
-        settle();
-      };
-
-      const abort = () => {
-        if (state.settled || closeGenRef.current !== gen) return;
-        state.settled = true;
-        cleanup();
-        restoreChip();
-        onFinished();
-      };
-
-      hideSub = Keyboard.addListener("keyboardDidHide", () => {
-        hideSub?.remove();
-        hideSub = null;
-        markKeyboardDone();
-      });
-
-      keyboardTimer = setTimeout(markKeyboardDone, KEYBOARD_HIDE_FALLBACK_MS);
-      failSafe = setTimeout(abort, SEARCH_MORPH_MS + KEYBOARD_HIDE_FALLBACK_MS + 120);
-
-      requestAnimationFrame(() => {
-        morphProgress.value = withTiming(
-          0,
-          { duration: SEARCH_MORPH_MS, easing: morphEasing },
-          (finished) => {
-            if (!finished) {
-              runOnJS(abort)();
-              return;
-            }
-            runOnJS(markMorphDone)();
-          },
-        );
-      });
+  const leaveSearch = useCallback(
+    (tabName?: string) => {
+      const target = tabName || lastTabRef.current || "index";
+      closeSearchMorph();
+      router.navigate(tabHref(target));
     },
-    [chipHidden, morphProgress, restoreChip, searchFieldVisibleSv],
+    [closeSearchMorph, router],
   );
 
   const value = useMemo(
@@ -226,30 +189,31 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
       collapseTarget,
       lastScrollY,
       morphProgress,
-      chipHidden,
-      searchFieldVisibleSv,
       chipX,
       chipY,
       chipW,
       chipH,
       searchFieldVisible,
+      lastTabRef,
+      cacheChipLayout,
       openSearch,
-      closeSearch,
+      closeSearchMorph,
+      leaveSearch,
     }),
     [
+      cacheChipLayout,
       chipH,
-      chipHidden,
       chipW,
       chipX,
       chipY,
-      closeSearch,
+      closeSearchMorph,
       collapseTarget,
       collapsed,
       lastScrollY,
+      leaveSearch,
       morphProgress,
       openSearch,
       searchFieldVisible,
-      searchFieldVisibleSv,
     ],
   );
 

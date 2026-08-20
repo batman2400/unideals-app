@@ -15,6 +15,11 @@ import { SearchMorph } from "@/components/SearchMorph";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { TabBarMotionProvider } from "@/context/TabBarMotionContext";
 import { handleAuthDeepLink } from "@/lib/authDeepLink";
+import {
+  consumeInitialPushTarget,
+  subscribeToPushResponses,
+  type PushTarget,
+} from "@/lib/pushNotifications";
 import { qrPayloadKind } from "@/lib/routeParams";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { colors } from "@/theme";
@@ -93,6 +98,23 @@ function NavigationGuard() {
     router.replace("/reset-password" as Href);
   }, [isLoading, isPasswordRecovery, router]);
 
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || isPasswordRecovery) return;
+
+    const openTarget = (target: PushTarget) => {
+      if (target.type === "deal") {
+        router.push(`/deal/${target.id}` as Href);
+      } else {
+        router.push(`/event/${target.id}` as Href);
+      }
+    };
+
+    const initial = consumeInitialPushTarget();
+    if (initial) openTarget(initial);
+
+    return subscribeToPushResponses(openTarget);
+  }, [isAuthenticated, isLoading, isPasswordRecovery, router]);
+
   if (isLoading) {
     return (
       <View style={styles.loading}>
@@ -110,14 +132,6 @@ function NavigationGuard() {
 
       <Stack.Protected guard={isAuthenticated && !isPasswordRecovery}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="search"
-          options={{
-            headerShown: false,
-            animation: "fade",
-            contentStyle: styles.content,
-          }}
-        />
         <Stack.Screen
           name="deal/[id]"
           options={{

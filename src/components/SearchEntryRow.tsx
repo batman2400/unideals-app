@@ -27,8 +27,10 @@ export function SearchEntryRow({ placeholder, onPress }: SearchEntryRowProps) {
           onPress({ x: 0, y: 0, width: 0, height: 0 });
           return;
         }
-        node.measureInWindow((x, y, width, height) => {
-          onPress({ x, y, width, height });
+        requestAnimationFrame(() => {
+          node.measureInWindow((x, y, width, height) => {
+            onPress({ x, y, width, height });
+          });
         });
       }}
       style={({ pressed }) => [pressed && styles.pressed]}

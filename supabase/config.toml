@@ -1,0 +1,5 @@
+# Required for `supabase functions deploy notify-students`.
+# Link this folder to the shared Uni Deals project first (`supabase link`).
+
+[functions.notify-students]
+verify_jwt = true

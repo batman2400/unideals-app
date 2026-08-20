@@ -1,11 +1,6 @@
-import {
-  useLocalSearchParams,
-  useNavigation,
-  useRouter,
-  type Href,
-} from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { ChevronLeft, Search, X } from "lucide-react-native";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -17,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, { interpolate, useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BrandResultRow } from "@/components/BrandResultRow";
@@ -34,7 +30,12 @@ import {
   partitionEvents,
   splitLiveEvents,
 } from "@/lib/eventTiming";
-import { SEARCH_FIELD_HEIGHT } from "@/lib/tabBar";
+import {
+  SEARCH_FIELD_HEIGHT,
+  SEARCH_FOCUS_AT,
+  SEARCH_MORPH_MS,
+  floatingTabBarScrollPadding,
+} from "@/lib/tabBar";
 import {
   filterDealBrands,
   filterDeals,
@@ -63,12 +64,9 @@ function asSearchScope(param: string | string[] | undefined): SearchScope {
 
 export default function SearchScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ scope?: string | string[] }>();
-  const { searchFieldVisible, closeSearch, morphProgress, chipHidden } =
-    useTabBarMotion();
-  const allowRemoveRef = useRef(false);
+  const { searchFieldVisible, leaveSearch, morphProgress } = useTabBarMotion();
   const inputRef = useRef<TextInput>(null);
 
   const { deals, isLoading: dealsLoading, isRefreshing: dealsRefreshing, error: dealsError, refresh: refreshDeals } =
@@ -87,31 +85,31 @@ export default function SearchScreen() {
     setScope(asSearchScope(params.scope));
   }, [params.scope]);
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
+  const focusSearchField = useCallback(() => {
+    inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("beforeRemove", (event) => {
-      if (allowRemoveRef.current) return;
-      const type = event.data.action.type;
-      if (type !== "POP" && type !== "GO_BACK" && type !== "POP_TO_TOP") {
-        return;
-      }
-      if (morphProgress.value < 0.05 && chipHidden.value === 0) {
-        return;
-      }
-      event.preventDefault();
-      closeSearch(() => {
-        allowRemoveRef.current = true;
-        navigation.dispatch(event.data.action);
-      });
-    });
-    return unsubscribe;
-  }, [chipHidden, closeSearch, morphProgress, navigation]);
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setTimeout(
+        focusSearchField,
+        Math.round(SEARCH_MORPH_MS * SEARCH_FOCUS_AT),
+      );
+      return () => clearTimeout(timer);
+    }, [focusSearchField]),
+  );
+
+  const screenStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(morphProgress.value, [0.18, 1], [0, 1]),
+  }));
+
+  const fieldRevealStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(morphProgress.value, [0.62, 1], [0.02, 1]),
+  }));
+
+  const backRevealStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(morphProgress.value, [0.55, 1], [0, 1]),
+  }));
 
   const { live: liveDeals, comingSoon: comingSoonDeals } = useMemo(
     () => partitionDeals(deals),
@@ -143,7 +141,8 @@ export default function SearchScreen() {
     if (selectedBrand) {
       const brandDeals = filterDeals(
         dealPool.filter(
-          (deal) => deal.brand.trim().toLowerCase() === selectedBrand.toLowerCase(),
+          (deal) =>
+            deal.brand.trim().toLowerCase() === selectedBrand.toLowerCase(),
         ),
         query,
       );
@@ -218,32 +217,29 @@ export default function SearchScreen() {
   const isRefreshing = dealsRefreshing || eventsRefreshing;
   const error = dealsError || eventsError;
 
-  const goBack = () => {
-    if (router.canGoBack()) router.back();
-  };
-
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      <Animated.View style={[styles.screen, screenStyle]}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          onPress={goBack}
-          style={({ pressed }) => [
-            styles.backBtn,
-            !searchFieldVisible && styles.backHidden,
-            pressed && styles.pressed,
-          ]}
-        >
-          <ChevronLeft color={colors.primary} size={26} />
-        </Pressable>
+        <Animated.View style={backRevealStyle}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => leaveSearch()}
+            disabled={!searchFieldVisible}
+            style={({ pressed }) => [
+              styles.backBtn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <ChevronLeft color={colors.primary} size={26} />
+          </Pressable>
+        </Animated.View>
 
-        <View
-          style={[styles.field, !searchFieldVisible && styles.fieldHidden]}
-        >
+        <Animated.View style={[styles.field, fieldRevealStyle]}>
           <Search color={colors.onSurfaceVariant} size={18} />
           <TextInput
             ref={inputRef}
@@ -254,27 +250,33 @@ export default function SearchScreen() {
             onChangeText={setQuery}
             autoCapitalize="none"
             autoCorrect={false}
+            autoFocus={false}
+            caretHidden={!searchFieldVisible}
+            editable
             returnKeyType="search"
             showSoftInputOnFocus
+            blurOnSubmit={false}
           />
-        </View>
+        </Animated.View>
       </View>
 
-      <View style={styles.scopeWrap}>
-        <SegmentedControl
-          value={scope}
-          onChange={(next) => {
-            setScope(next);
-            setSelectedBrand(null);
-          }}
-          options={[
-            { value: "all", label: "All" },
-            { value: "deals", label: "Deals" },
-            { value: "events", label: "Events" },
-            { value: "brands", label: "Brands" },
-          ]}
-        />
-      </View>
+      <Animated.View style={styles.body}>
+        <View style={styles.scopeWrap}>
+          <SegmentedControl
+            value={scope}
+            onChange={(next) => {
+              setScope(next);
+              setSelectedBrand(null);
+              router.setParams({ scope: next });
+            }}
+            options={[
+              { value: "all", label: "All" },
+              { value: "deals", label: "Deals" },
+              { value: "events", label: "Events" },
+              { value: "brands", label: "Brands" },
+            ]}
+          />
+        </View>
 
       {selectedBrand ? (
         <Pressable
@@ -300,8 +302,11 @@ export default function SearchScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-          contentContainerStyle={styles.listContent}
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: floatingTabBarScrollPadding(insets.bottom) },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -375,6 +380,8 @@ export default function SearchScreen() {
           }
         />
       )}
+      </Animated.View>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 }
@@ -383,6 +390,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  screen: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",
@@ -397,9 +407,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backHidden: {
-    opacity: 0,
-  },
   field: {
     flex: 1,
     height: SEARCH_FIELD_HEIGHT,
@@ -412,8 +419,8 @@ const styles = StyleSheet.create({
     borderColor: colors.outlineVariant,
     backgroundColor: colors.surfaceContainerLowest,
   },
-  fieldHidden: {
-    opacity: 0,
+  body: {
+    flex: 1,
   },
   input: {
     flex: 1,
@@ -446,7 +453,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
     gap: spacing.md,
   },
   sectionTitle: {

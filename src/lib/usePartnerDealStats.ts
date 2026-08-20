@@ -25,6 +25,7 @@ export interface UsePartnerDealStatsResult {
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
+  warning: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -89,6 +90,7 @@ export function usePartnerDealStats(
   const [isLoading, setIsLoading] = useState(Boolean(partnerId));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const activeRef = useRef(true);
 
   useEffect(() => {
@@ -104,6 +106,7 @@ export function usePartnerDealStats(
         setDealStats([]);
         setFallbackTotals(null);
         setError(null);
+        setWarning(null);
         setIsLoading(false);
         setIsRefreshing(false);
         return;
@@ -126,10 +129,14 @@ export function usePartnerDealStats(
           setDealStats([]);
           setFallbackTotals(totals);
           setError(null);
+          setWarning(
+            "Per-deal analytics aren't available. Showing scan totals only.",
+          );
         } catch (fallbackError) {
           if (!activeRef.current) return;
           setDealStats([]);
           setFallbackTotals(null);
+          setWarning(null);
           setError(
             toErrorMessage(
               fallbackError,
@@ -151,6 +158,7 @@ export function usePartnerDealStats(
       setDealStats(mapped);
       setFallbackTotals(null);
       setError(null);
+      setWarning(null);
       setIsLoading(false);
       setIsRefreshing(false);
     },
@@ -176,6 +184,7 @@ export function usePartnerDealStats(
     isLoading,
     isRefreshing,
     error,
+    warning,
     refresh,
   };
 }

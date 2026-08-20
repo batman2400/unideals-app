@@ -535,7 +535,11 @@ export function useAdminDeals(
         const next = prev.map((d) =>
           d.id === dealId ? { ...d, status, dbStatus: status } : d,
         );
-        if (statusFilter === "all") return next;
+        if (statusFilter === "all") {
+          return next.filter(
+            (deal) => getAdminDealLifecycle(deal) !== "expired",
+          );
+        }
         return next.filter(
           (deal) => getAdminDealLifecycle(deal) === statusFilter,
         );

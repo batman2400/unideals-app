@@ -1,22 +1,24 @@
 import { MIN_TAP_TARGET, spacing } from "@/theme";
 
-/** Inner height of the floating pill (icons + labels). */
-export const TAB_BAR_HEIGHT = 60;
+/** Height of the floating chip row. */
+export const TAB_BAR_HEIGHT = 48;
 
-/** Corner radius — a full pill at TAB_BAR_HEIGHT. */
 export const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2;
 
 /** Gap from the left/right screen edges. */
-export const TAB_BAR_HORIZONTAL_INSET = 20;
+export const TAB_BAR_HORIZONTAL_INSET = 16;
 
-/** Extra lift above the home indicator / system nav. */
+/** Extra lift above the home indicator. */
 export const TAB_BAR_FLOAT_GAP = 10;
 
-export const SEARCH_CHIP_EXPANDED_WIDTH = 118;
-export const SEARCH_CHIP_COLLAPSED_WIDTH = 52;
-export const SEARCH_CHIP_HEIGHT = 44;
+export const SEARCH_CHIP_EXPANDED_WIDTH = 128;
+export const SEARCH_CHIP_COLLAPSED_WIDTH = 48;
+export const SEARCH_CHIP_HEIGHT = 48;
 export const SEARCH_FIELD_HEIGHT = 48;
-export const SEARCH_MORPH_MS = 340;
+export const SEARCH_MORPH_MS = 300;
+export const SEARCH_FOCUS_AT = 0.72;
+export const TAB_CHIP_GAP = 8;
+export const TAB_ICON_SIZE = 22;
 
 export type MeasuredLayout = {
   x: number;
@@ -29,12 +31,12 @@ export function floatingTabBarBottomOffset(safeBottom: number) {
   return safeBottom + TAB_BAR_FLOAT_GAP;
 }
 
-/** Scroll/list padding so content can clear the floating tab bar. */
+/** Scroll/list padding so content can clear the floating chips. */
 export function floatingTabBarScrollPadding(safeBottom: number) {
   return TAB_BAR_HEIGHT + floatingTabBarBottomOffset(safeBottom) + spacing.lg;
 }
 
-/** Destination frame for the Search screen input (must match app/search.tsx). */
+/** Destination frame for the Search screen input (must match app/(tabs)/search.tsx). */
 export function searchFieldTargetLayout(
   windowWidth: number,
   topInset: number,

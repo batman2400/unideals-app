@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -21,6 +21,7 @@ import { Select } from "@/components/Select";
 import { useAuth } from "@/context/AuthContext";
 import { validateSchedule } from "@/lib/dealForm";
 import { uploadEventImage } from "@/lib/eventImageUpload";
+import { asHttpUrl } from "@/lib/httpUrl";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
 import { colors, spacing } from "@/theme";
@@ -51,6 +52,7 @@ export default function CreateEventScreen() {
   const [image, setImage] = useState<PickedImage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
 
   const isDirty = useMemo(
     () =>
@@ -86,16 +88,13 @@ export default function CreateEventScreen() {
   const allowLeave = useUnsavedChangesGuard(isDirty);
 
   const handleSubmit = useCallback(async () => {
+    if (inFlightRef.current) return;
     if (!user) {
       setError("You must be signed in to submit an event.");
       return;
     }
     if (!title.trim()) {
       setError("Event title is required.");
-      return;
-    }
-    if (!universityName.trim()) {
-      setError("University name is required.");
       return;
     }
 
@@ -111,6 +110,16 @@ export default function CreateEventScreen() {
       return;
     }
 
+    let registrationUrl: string | null = null;
+    if (externalRegistrationUrl.trim()) {
+      registrationUrl = asHttpUrl(externalRegistrationUrl);
+      if (!registrationUrl) {
+        setError("Enter a valid http(s) registration link.");
+        return;
+      }
+    }
+
+    inFlightRef.current = true;
     setIsSubmitting(true);
     setError(null);
 
@@ -130,11 +139,11 @@ export default function CreateEventScreen() {
         title: title.trim(),
         description: description.trim() || null,
         category,
-        university_name: universityName.trim(),
+        university_name: universityName.trim() || null,
         club_name: clubName.trim() || null,
         location_name: locationName.trim() || null,
         target_audience: targetAudience,
-        external_registration_url: externalRegistrationUrl.trim() || null,
+        external_registration_url: registrationUrl,
         cover_image_url: coverImageUrl,
         start_time: startAt.toISOString(),
         publish_at: (publishAt ?? new Date()).toISOString(),
@@ -161,6 +170,7 @@ export default function CreateEventScreen() {
     } catch (caught) {
       setError(toErrorMessage(caught, "Failed to create event."));
     } finally {
+      inFlightRef.current = false;
       setIsSubmitting(false);
     }
   }, [
@@ -214,7 +224,7 @@ export default function CreateEventScreen() {
         />
 
         <FormField
-          label="University Name"
+          label="University Name (Optional)"
           value={universityName}
           onChangeText={setUniversityName}
           placeholder="e.g. University of Colombo"

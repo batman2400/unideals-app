@@ -22,11 +22,17 @@ import QRCode from "react-native-qrcode-svg";
 import { Button } from "@/components/Button";
 import { SaveDealButton } from "@/components/DealCard";
 import { useAuth } from "@/context/AuthContext";
-import { formatLaunchDate, isComingSoonDeal, isExpiredDeal } from "@/lib/eventTiming";
+import {
+  formatDealVisibleSchedule,
+  formatLaunchDate,
+  isComingSoonDeal,
+  isExpiredDeal,
+} from "@/lib/eventTiming";
 import { asHttpUrl } from "@/lib/httpUrl";
 import { asRouteId } from "@/lib/routeParams";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { useDeal } from "@/lib/useDeals";
+import { usePartnerBrand } from "@/lib/usePartnerBrand";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { useStudentVerificationRequest } from "@/lib/useVerificationRequest";
 import { colors, radius, spacing } from "@/theme";
@@ -53,13 +59,25 @@ export default function DealDetailScreen() {
 
   const { deal, isLoading, error } = useDeal(id || undefined, accessKey);
   const { savedIds, isLoading: savedLoading, toggleSave } = useSavedDeals();
+  const { brandName } = usePartnerBrand(
+    role === "partner" ? user?.id : null,
+  );
   const dealId = Number(id);
   const isSaved = Number.isFinite(dealId) && savedIds.has(dealId);
 
-  const isPrivilegedRole = role === "admin" || role === "partner";
+  const isOwningPartner =
+    role === "partner" &&
+    Boolean(
+      deal &&
+        brandName &&
+        deal.brand.trim().toLowerCase() === brandName.trim().toLowerCase(),
+    );
   const canRevealRedemption =
-    isPrivilegedRole || (isAuthenticated && isVerified);
+    role === "admin" ||
+    isOwningPartner ||
+    (role === "student" && isAuthenticated && isVerified);
   const showVerificationWall = !canRevealRedemption;
+  const scheduleLabel = deal ? formatDealVisibleSchedule(deal) : null;
   const { isInFlight } = useStudentVerificationRequest(
     user?.id,
     Boolean(showVerificationWall && isAuthenticated),
@@ -73,7 +91,7 @@ export default function DealDetailScreen() {
     );
   }
 
-  if (error || !deal || (isExpiredDeal(deal) && !isPrivilegedRole)) {
+  if (error || !deal) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorTitle}>Deal not found</Text>
@@ -125,6 +143,9 @@ export default function DealDetailScreen() {
         </View>
         {deal.description ? (
           <Text style={styles.description}>{deal.description}</Text>
+        ) : null}
+        {scheduleLabel ? (
+          <Text style={styles.scheduleLabel}>{scheduleLabel}</Text>
         ) : null}
 
         {isExpiredDeal(deal) ? (
@@ -601,6 +622,12 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     lineHeight: 21,
+    color: colors.onSurfaceVariant,
+  },
+  scheduleLabel: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
     color: colors.onSurfaceVariant,
   },
   wall: {

@@ -110,8 +110,7 @@ export async function getPartnerBrand(
     brandName: null,
     logoUrl: null,
     source: null,
-    error:
-      "No brand is assigned to this partner account yet. Please contact an admin to be assigned a brand.",
+    error: PARTNER_BRAND_REQUIRED_MESSAGE,
   };
 }
 

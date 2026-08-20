@@ -85,6 +85,22 @@ export function formatLaunchRelative(value: string | null | undefined): string {
   })}`;
 }
 
+/** Partner-controlled start/end labels for student cards and deal detail. */
+export function formatDealVisibleSchedule(
+  deal: Pick<Deal, "startTime" | "endTime" | "showStartDate" | "showEndDate">,
+): string | null {
+  const parts: string[] = [];
+  if (deal.showStartDate) {
+    const start = formatLaunchDate(deal.startTime);
+    if (start) parts.push(`Starts ${start}`);
+  }
+  if (deal.showEndDate) {
+    const end = formatLaunchDate(deal.endTime);
+    if (end) parts.push(`Ends ${end}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 function dealLaunchMs(deal: Deal): number {
   const t = deal.startTime ? new Date(deal.startTime).getTime() : NaN;
   return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;

@@ -90,7 +90,7 @@ export function useAdminAnalytics(): UseAdminAnalyticsResult {
     }
     setError(null);
 
-    const [shopRes, dealsRes, scansRes] = await Promise.all([
+    const [shopRes, dealsRes] = await Promise.all([
       supabase.rpc("get_redemption_analytics_by_shop"),
       supabase.rpc("admin_list_all_deals", {
         status_filter: null,
@@ -98,14 +98,6 @@ export function useAdminAnalytics(): UseAdminAnalyticsResult {
         page_limit: 1000,
         page_offset: 0,
       }),
-      supabase
-        .from("redemption_events")
-        .select(
-          "id, brand, scanned_code, scan_result, scan_method, created_at, deals(title)",
-        )
-        .eq("scan_result", "valid")
-        .order("created_at", { ascending: false })
-        .limit(20),
     ]);
 
     if (!activeRef.current) return;
@@ -121,6 +113,27 @@ export function useAdminAnalytics(): UseAdminAnalyticsResult {
       setDealStats(((dealsRes.data ?? []) as AdminDealRow[]).map(mapAdminDeal));
     }
 
+    setIsLoading(false);
+    setIsRefreshing(false);
+  }, []);
+
+  const loadScans = useCallback(async (): Promise<void> => {
+    let query = supabase
+      .from("redemption_events")
+      .select(
+        "id, brand, scanned_code, scan_result, scan_method, created_at, deals(title)",
+      )
+      .eq("scan_result", "valid")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (selectedBrand !== "All Brands") {
+      query = query.eq("brand", selectedBrand);
+    }
+
+    const scansRes = await query;
+    if (!activeRef.current) return;
+
     if (scansRes.error) {
       setRecentScans([]);
     } else {
@@ -128,10 +141,7 @@ export function useAdminAnalytics(): UseAdminAnalyticsResult {
         ((scansRes.data ?? []) as AdminRecentScanRow[]).map(mapAdminRecentScan),
       );
     }
-
-    setIsLoading(false);
-    setIsRefreshing(false);
-  }, []);
+  }, [selectedBrand]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -140,6 +150,10 @@ export function useAdminAnalytics(): UseAdminAnalyticsResult {
       activeRef.current = false;
     };
   }, [load]);
+
+  useEffect(() => {
+    void loadScans();
+  }, [loadScans]);
 
   const brandOptions = useMemo(
     () => [
@@ -199,6 +213,9 @@ export function useAdminAnalytics(): UseAdminAnalyticsResult {
     isLoading,
     isRefreshing,
     error,
-    refresh: () => load(true),
+    refresh: async () => {
+      await load(true);
+      await loadScans();
+    },
   };
 }

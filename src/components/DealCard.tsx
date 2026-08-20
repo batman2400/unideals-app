@@ -3,8 +3,10 @@ import { Clock, Heart, Store, Tag } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
+  formatDealVisibleSchedule,
   formatLaunchRelative,
   isComingSoonDeal,
+  isExpiredDeal,
 } from "@/lib/eventTiming";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import type { Deal } from "@/types/database";
@@ -66,10 +68,13 @@ export function DealCard({
   onToggleSave,
 }: DealCardProps) {
   const isInStore = deal.type === "In-Store";
-  const comingSoon = isComingSoonDeal(deal);
+  const expired = isExpiredDeal(deal);
+  const comingSoon = !expired && isComingSoonDeal(deal);
   const launchLabel = comingSoon
     ? formatLaunchRelative(deal.startTime) || "Coming soon"
     : null;
+  const scheduleLabel =
+    !comingSoon && !expired ? formatDealVisibleSchedule(deal) : null;
 
   return (
     <Pressable
@@ -92,7 +97,12 @@ export function DealCard({
           </View>
         )}
 
-        {comingSoon ? (
+        {expired ? (
+          <View style={[styles.badge, styles.badgeEnded]}>
+            <Clock color={colors.onSurface} size={12} />
+            <Text style={[styles.badgeText, styles.badgeTextEnded]}>Ended</Text>
+          </View>
+        ) : comingSoon ? (
           <View style={[styles.badge, styles.badgeComingSoon]}>
             <Clock color={colors.white} size={12} />
             <Text style={[styles.badgeText, styles.badgeTextComingSoon]}>
@@ -143,6 +153,8 @@ export function DealCard({
         <Text style={styles.discount}>{deal.discount}</Text>
         {launchLabel ? (
           <Text style={styles.launchLabel}>{launchLabel}</Text>
+        ) : scheduleLabel ? (
+          <Text style={styles.scheduleLabel}>{scheduleLabel}</Text>
         ) : null}
         {deal.description ? (
           <Text style={styles.description} numberOfLines={2}>
@@ -225,6 +237,9 @@ const styles = StyleSheet.create({
   badgeComingSoon: {
     backgroundColor: colors.info,
   },
+  badgeEnded: {
+    backgroundColor: colors.surfaceContainerHigh,
+  },
   badgeText: {
     fontSize: 11,
     fontWeight: "700",
@@ -237,6 +252,9 @@ const styles = StyleSheet.create({
   },
   badgeTextComingSoon: {
     color: colors.white,
+  },
+  badgeTextEnded: {
+    color: colors.onSurface,
   },
   body: {
     padding: spacing.lg,
@@ -264,6 +282,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: colors.info,
+  },
+  scheduleLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: colors.onSurfaceVariant,
   },
   description: {
     fontSize: 13,

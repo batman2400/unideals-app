@@ -87,21 +87,29 @@ export default function LoginScreen() {
     setError(null);
     setNotice(null);
 
-    const result = isSignUp
-      ? await signUp(email, password, { fullName, username })
-      : await signIn(email, password);
+    try {
+      const result = isSignUp
+        ? await signUp(email, password, { fullName, username })
+        : await signIn(email, password);
 
-    if (result.error) {
-      setError(result.error);
-    } else if (isSignUp) {
-      setNotice(
-        "Account created. Check your inbox to confirm your email, then sign in.",
+      if (result.error) {
+        setError(result.error);
+      } else if (isSignUp) {
+        setNotice(
+          "Account created. Check your inbox to confirm your email, then sign in.",
+        );
+        setTab("signin");
+        setPassword("");
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to sign in. Please try again.",
       );
-      setTab("signin");
-      setPassword("");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
   }, [
     canSubmit,
     isBusy,
@@ -125,15 +133,23 @@ export default function LoginScreen() {
     setError(null);
     setNotice(null);
 
-    const result = await resetPassword(email);
+    try {
+      const result = await resetPassword(email);
 
-    if (result.error) {
-      setError(result.error);
-    } else {
-      setNotice("Password reset link sent. Check your email.");
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setNotice("Password reset link sent. Check your email.");
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to send reset email.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
   }, [email, isBusy, resetPassword]);
 
   const handleGoogleSignIn = useCallback(async () => {
@@ -143,13 +159,20 @@ export default function LoginScreen() {
     setError(null);
     setNotice(null);
 
-    const result = await signInWithGoogle();
-
-    if (result.error) {
-      setError(result.error);
+    try {
+      const result = await signInWithGoogle();
+      if (result.error) {
+        setError(result.error);
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Google sign-in didn't work. Please try again.",
+      );
+    } finally {
+      setIsGoogleSubmitting(false);
     }
-
-    setIsGoogleSubmitting(false);
   }, [isBusy, signInWithGoogle]);
 
   return (
@@ -292,8 +315,8 @@ export default function LoginScreen() {
             </Pressable>
           ) : (
             <Text style={styles.disclaimer}>
-              Sign up with your university email ending in .ac.lk, .edu.lk, or
-              .edu to be verified instantly.
+              After you sign up, verify from Profile with a university email OTP
+              or student ID upload. Verification is valid for 12 months.
             </Text>
           )}
         </View>

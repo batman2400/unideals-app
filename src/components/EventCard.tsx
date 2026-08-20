@@ -69,10 +69,9 @@ export function EventCard({ event, onPress }: EventCardProps) {
             </Text>
           </View>
         ) : null}
-        {event.universityName ? (
+        {event.universityName || event.clubName ? (
           <Text style={styles.university} numberOfLines={1}>
-            {event.universityName}
-            {event.clubName ? ` · ${event.clubName}` : ""}
+            {[event.universityName, event.clubName].filter(Boolean).join(" · ")}
           </Text>
         ) : null}
       </View>

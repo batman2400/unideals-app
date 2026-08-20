@@ -15,6 +15,7 @@ export type PartnerDealLifecycle =
   | "active"
   | "scheduled"
   | "expired"
+  | "paused"
   | "pending"
   | "rejected"
   | "other";
@@ -47,6 +48,7 @@ export function getPartnerDealLifecycle(
 ): PartnerDealLifecycle {
   if (deal.status === "pending") return "pending";
   if (deal.status === "rejected") return "rejected";
+  if (deal.status === "paused") return "paused";
 
   const start = deal.startTime ? new Date(deal.startTime) : new Date(0);
   const end = deal.endTime ? new Date(deal.endTime) : null;

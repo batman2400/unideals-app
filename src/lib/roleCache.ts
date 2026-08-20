@@ -65,3 +65,34 @@ export async function clearCachedUserRole(): Promise<void> {
     // Ignore.
   }
 }
+
+const RECOVERY_USER_KEY = "unideals.password-recovery-user";
+
+export async function readPasswordRecoveryUser(): Promise<string | null> {
+  if (!canUseStorage) return null;
+  try {
+    return await AsyncStorage.getItem(RECOVERY_USER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export async function writePasswordRecoveryUser(
+  userId: string,
+): Promise<void> {
+  if (!canUseStorage) return;
+  try {
+    await AsyncStorage.setItem(RECOVERY_USER_KEY, userId);
+  } catch {
+    // Ignore.
+  }
+}
+
+export async function clearPasswordRecoveryUser(): Promise<void> {
+  if (!canUseStorage) return;
+  try {
+    await AsyncStorage.removeItem(RECOVERY_USER_KEY);
+  } catch {
+    // Ignore.
+  }
+}

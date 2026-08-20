@@ -193,6 +193,7 @@ export default function PartnerAnalyticsScreen() {
     isLoading,
     isRefreshing,
     error,
+    warning,
     refresh,
   } = usePartnerDealStats(user?.id);
 
@@ -239,6 +240,12 @@ export default function PartnerAnalyticsScreen() {
       {error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+
+      {warning ? (
+        <View style={styles.warningBox}>
+          <Text style={styles.warningText}>{warning}</Text>
         </View>
       ) : null}
 
@@ -362,6 +369,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: colors.onErrorContainer,
+  },
+  warningBox: {
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.infoContainer,
+    borderWidth: 1,
+    borderColor: colors.info,
+  },
+  warningText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.onInfoContainer,
   },
   statGrid: {
     flexDirection: "row",

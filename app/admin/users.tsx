@@ -1,4 +1,5 @@
 import * as Clipboard from "expo-clipboard";
+import { useLocalSearchParams } from "expo-router";
 import {
   ArrowDown,
   BadgeCheck,
@@ -167,7 +168,15 @@ function UserCard({
 }
 
 export default function AdminUsersScreen() {
-  const [roleFilter, setRoleFilter] = useState<AdminUserRoleFilter>("all");
+  const params = useLocalSearchParams<{ role?: string | string[] }>();
+  const roleParam = Array.isArray(params.role) ? params.role[0] : params.role;
+  const initialRole: AdminUserRoleFilter =
+    roleParam === "partner" ||
+    roleParam === "student" ||
+    roleParam === "admin"
+      ? roleParam
+      : "all";
+  const [roleFilter, setRoleFilter] = useState<AdminUserRoleFilter>(initialRole);
   const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showPromote, setShowPromote] = useState(false);
@@ -178,6 +187,16 @@ export default function AdminUsersScreen() {
     const timer = setTimeout(() => setSearchQuery(inputValue.trim()), 400);
     return () => clearTimeout(timer);
   }, [inputValue]);
+
+  useEffect(() => {
+    if (
+      roleParam === "partner" ||
+      roleParam === "student" ||
+      roleParam === "admin"
+    ) {
+      setRoleFilter(roleParam);
+    }
+  }, [roleParam]);
 
   const {
     users,

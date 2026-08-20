@@ -12,23 +12,24 @@ import {
 
 import { Button } from "@/components/Button";
 import { DealCard } from "@/components/DealCard";
-import { useDeals } from "@/lib/useDeals";
+import { useSavedDealCatalog } from "@/lib/useDeals";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { colors, spacing } from "@/theme";
 
 export default function SavedDealsScreen() {
   const router = useRouter();
-  const { deals, isLoading: dealsLoading, isRefreshing, error, refresh } =
-    useDeals();
   const { savedIds, isLoading: savedLoading, error: savedError, refresh: refreshSaved, toggleSave } =
     useSavedDeals();
+  const { deals, isLoading: dealsLoading, isRefreshing, error, refresh } =
+    useSavedDealCatalog(savedIds);
 
-  const savedDeals = useMemo(
-    () => deals.filter((deal) => savedIds.has(deal.id)),
-    [deals, savedIds],
-  );
-
+  const hiddenCount = Math.max(0, savedIds.size - deals.length);
   const isLoading = dealsLoading || savedLoading;
+
+  const emptyUnavailable = useMemo(
+    () => savedIds.size > 0 && deals.length === 0,
+    [savedIds.size, deals.length],
+  );
 
   return (
     <View style={styles.root}>
@@ -38,7 +39,7 @@ export default function SavedDealsScreen() {
         </View>
       ) : (
         <FlatList
-          data={savedDeals}
+          data={deals}
           keyExtractor={(deal) => String(deal.id)}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -68,6 +69,15 @@ export default function SavedDealsScreen() {
               </Text>
             ) : null
           }
+          ListFooterComponent={
+            hiddenCount > 0 && deals.length > 0 ? (
+              <Text style={styles.endedNote}>
+                {hiddenCount === 1
+                  ? "1 saved offer is no longer available."
+                  : `${hiddenCount} saved offers are no longer available.`}
+              </Text>
+            ) : null
+          }
           ListEmptyComponent={
             savedError ? (
               <View style={styles.stateBlock}>
@@ -76,6 +86,19 @@ export default function SavedDealsScreen() {
                 <Button
                   label="Retry"
                   onPress={() => void refreshSaved()}
+                />
+              </View>
+            ) : emptyUnavailable ? (
+              <View style={styles.stateBlock}>
+                <Bookmark color={colors.onSurfaceVariant} size={32} />
+                <Text style={styles.stateTitle}>Saved offers unavailable</Text>
+                <Text style={styles.stateBody}>
+                  Those deals may have ended or been removed. Browse live
+                  offers to save something new.
+                </Text>
+                <Button
+                  label="Browse deals"
+                  onPress={() => router.push("/deals" as Href)}
                 />
               </View>
             ) : (
@@ -115,6 +138,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.error,
     marginBottom: spacing.sm,
+  },
+  endedNote: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+    color: colors.onSurfaceVariant,
+    paddingVertical: spacing.md,
   },
   stateBlock: {
     flex: 1,

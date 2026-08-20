@@ -64,7 +64,7 @@ export default function HomeScreen() {
   const trendingDeals = liveDeals.slice(0, 8);
   const comingSoonDealsPreview = comingSoonDeals.slice(0, 6);
 
-  const { live: liveEvents, comingSoon: comingSoonEvents } = useMemo(
+  const { live: liveEvents } = useMemo(
     () => partitionEvents(events),
     [events],
   );
@@ -73,7 +73,6 @@ export default function HomeScreen() {
     [liveEvents],
   );
   const trendingEvents = activeEvents.slice(0, 6);
-  const comingSoonEventsPreview = comingSoonEvents.slice(0, 6);
 
   const isRefreshing = dealsRefreshing || eventsRefreshing;
 
@@ -213,36 +212,6 @@ export default function HomeScreen() {
           No scheduled deals yet — they appear here until go-live.
         </Text>
       )}
-
-      <SectionHeader
-        title="Coming Soon Events"
-        actionLabel="View all"
-        onAction={() =>
-          router.push({
-            pathname: "/events",
-            params: { schedule: "coming_soon" },
-          } as Href)
-        }
-      />
-      {eventsLoading ? (
-        <ListSkeleton variant="carousel" count={3} />
-      ) : comingSoonEventsPreview.length > 0 ? (
-        <HeroCarousel>
-          {comingSoonEventsPreview.map((event) => (
-            <HeroEventCard
-              key={`soon-event-${event.id}`}
-              event={event}
-              comingSoon
-              onPress={() => router.push(`/event/${event.id}` as Href)}
-            />
-          ))}
-        </HeroCarousel>
-      ) : (
-        <Text style={styles.emptyInline}>
-          No scheduled listings yet — set a future Publish At when
-          submitting an event.
-        </Text>
-      )}
     </Animated.ScrollView>
   );
 }
@@ -365,11 +334,9 @@ function HeroDealCard({
 function HeroEventCard({
   event,
   onPress,
-  comingSoon = false,
 }: {
   event: CampusEvent;
   onPress: () => void;
-  comingSoon?: boolean;
 }) {
   const eyebrow =
     event.universityName?.trim() ||
@@ -398,17 +365,8 @@ function HeroEventCard({
           </View>
         ) : null}
         <View style={styles.heroTopLeft}>
-          <View
-            style={[
-              styles.floatingBadge,
-              comingSoon && styles.comingSoonBadge,
-            ]}
-          >
-            <Text style={styles.floatingBadgeText}>
-              {comingSoon
-                ? formatLaunchRelative(event.publishAt).toUpperCase()
-                : "EVENT"}
-            </Text>
+          <View style={styles.floatingBadge}>
+            <Text style={styles.floatingBadgeText}>EVENT</Text>
           </View>
         </View>
         <LinearGradient

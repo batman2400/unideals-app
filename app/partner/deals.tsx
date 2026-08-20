@@ -48,6 +48,8 @@ function statusBadgeColors(lifecycle: PartnerDealLifecycle): {
       };
     case "expired":
       return { backgroundColor: colors.surfaceContainerHigh, color: colors.onSurface };
+    case "paused":
+      return { backgroundColor: "#fee2e2", color: "#b91c1c" };
     case "pending":
       return { backgroundColor: "#fef3c7", color: "#b45309" };
     case "rejected":

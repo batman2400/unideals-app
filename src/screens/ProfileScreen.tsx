@@ -218,7 +218,7 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
               onFormOpenChange={setVerificationFormOpen}
               onRequestChange={handleVerificationChange}
               renewal={isVerificationExpired || isVerificationExpiringSoon}
-              expiresOn={expiresAtLabel}
+              expiresOn={isVerificationExpired ? null : expiresAtLabel}
             />
           </>
         ) : null

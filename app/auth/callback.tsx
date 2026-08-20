@@ -36,7 +36,7 @@ export default function AuthCallbackScreen() {
         pathname: "/login",
         params: {
           error:
-            "Google sign-in didn't finish. Please try again — if this keeps happening, the Google provider may not be enabled in Supabase yet.",
+            "Sign-in didn't finish. Please try again from the login screen.",
         },
       });
     }, FALLBACK_MS);
@@ -47,7 +47,7 @@ export default function AuthCallbackScreen() {
   return (
     <View style={styles.root}>
       <ActivityIndicator color={colors.primary} size="large" />
-      <Text style={styles.label}>Finishing Google sign-in...</Text>
+      <Text style={styles.label}>Finishing sign-in…</Text>
     </View>
   );
 }

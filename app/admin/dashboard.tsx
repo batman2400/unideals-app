@@ -128,7 +128,12 @@ export default function AdminDashboardScreen() {
               label="Total Partners"
               value={metrics.totalPartners}
               icon={<Building2 color={colors.onBackground} size={18} />}
-              onPress={() => router.push("/admin/brands" as Href)}
+              onPress={() =>
+                router.push({
+                  pathname: "/admin/users",
+                  params: { role: "partner" },
+                } as Href)
+              }
             />
             <StatCard
               label="Pending Verifications"

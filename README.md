@@ -12,9 +12,8 @@ without changes.
 - An Expo account ([expo.dev](https://expo.dev)) for EAS cloud builds
 - A **custom development build** on your phone (recommended), or Expo Go for quick UI-only checks
 
-Native modules such as `expo-camera` (and future push notifications / deep-link
-integrations) work most reliably in a custom development client built with EAS
-— not Expo Go.
+Native modules such as `expo-camera` and `expo-notifications` work most
+reliably in a custom development client built with EAS — not Expo Go.
 
 ## Getting started
 
@@ -88,6 +87,7 @@ app/                       Expo Router file-based routes
   admin/*                  Admin portal (moderation, content, system tools)
 src/
   lib/supabase.ts          Supabase client (AsyncStorage session persistence)
+  lib/pushNotifications.ts Expo token register + notification tap routing
   lib/useDeals.ts          get_public_deals() reader
   lib/useEvents.ts         Approved events reader
   lib/useAdmin*.ts         Admin overview / deals / users / events / content hooks
@@ -96,6 +96,8 @@ src/
   components/              Shared UI primitives
   theme/                   Design tokens ported from tailwind.config.js
   types/database.ts        Schema + RPC types
+supabase_push_notifications.sql  `push_tokens` table + token RPCs
+supabase/functions/notify-students  Expo push sender (new deal / approved event)
 ```
 
 ### Auth and roles
@@ -134,6 +136,71 @@ Partners open the scanner from the Partner Portal hero action
 (`/partner/scanner`). It reads `unideals://ticket/<code>` QR codes with
 `expo-camera`, or accepts a typed `UD-XXXXXX` code, and validates both through
 `validate_instore_ticket()`.
+
+### Push notifications (new deals and events)
+
+Students with a physical device and notification permission get an Expo push
+when a deal is published (`status = approved`, including Coming Soon) or an
+event is approved by an admin. Partners and admins are not notified. Tapping
+the alert opens `/deal/[id]` or `/event/[id]`.
+
+Publishing from the mobile app or the website both fire alerts — sending is
+a Database Webhook, not the client.
+
+#### 1. Database
+
+Run [`supabase_push_notifications.sql`](supabase_push_notifications.sql) in the
+Supabase SQL editor (same shared project as the web app).
+
+#### 2. Edge Function
+
+From this repo (after `supabase login` and `supabase link`):
+
+```bash
+supabase functions deploy notify-students
+```
+
+The function refuses anything except the **service role** JWT so the public
+anon key cannot send blasts.
+
+#### 3. Database Webhooks
+
+In Supabase: **Database → Webhooks → Create a new hook**. Create **two** hooks
+pointing at the same URL:
+
+`https://<YOUR-PROJECT-REF>.supabase.co/functions/v1/notify-students`
+
+| Hook | Table | Events | HTTP |
+| ---- | ----- | ------ | ---- |
+| Notify students (deals) | `public.deals` | Insert, Update | POST |
+| Notify students (events) | `public.events` | Insert, Update | POST |
+
+HTTP headers:
+
+- `Content-Type`: `application/json`
+- `Authorization`: `Bearer <SUPABASE_SERVICE_ROLE_KEY>`
+
+The function ignores rows that are not **newly** `approved` (pending event
+submits, pause/edit of an already-live deal, etc.).
+
+#### 4. Native rebuild and EAS credentials
+
+`expo-notifications` is a native module. Rebuild the development client after
+this change:
+
+```bash
+npm run build:dev:android
+```
+
+In [Expo credentials](https://expo.dev/accounts/uvaram2004/projects/unideals-app/credentials):
+
+- **Android:** two Firebase files, both required:
+  1. Download `google-services.json` from Firebase (Project settings → Your apps → Android `co.unideals.app`) and save it as `google-services.json` in this folder. `app.json` already points at it via `android.googleServicesFile`.
+  2. Upload the FCM V1 **service account** key in Expo credentials (that one is for Expo to *send* the push).
+- **iOS:** let EAS manage the APNs key, or upload your own.
+
+Push tokens are only issued on a **physical device** in a custom build — not
+simulators, and not Expo Go for this project.
 
 ### Deal detail & verification
 

@@ -28,7 +28,7 @@ import { ActionTile } from "@/components/ActionTile";
 import { StatCard } from "@/components/StatCard";
 import { useAuth } from "@/context/AuthContext";
 import { supabase, toErrorMessage } from "@/lib/supabase";
-import { usePartnerBrand } from "@/lib/usePartnerBrand";
+import { PARTNER_BRAND_REQUIRED_MESSAGE, usePartnerBrand } from "@/lib/usePartnerBrand";
 import { usePartnerDeals } from "@/lib/usePartnerDeals";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 
@@ -93,7 +93,12 @@ export default function PartnerDashboardScreen() {
   }, [refreshBrand, refreshDeals, loadRedemptions]);
 
   const isLoading = brandLoading || dealsLoading;
-  const error = brandError ?? dealsError ?? redemptionsError;
+  const error =
+    (brandError && brandError !== PARTNER_BRAND_REQUIRED_MESSAGE
+      ? brandError
+      : null) ??
+    dealsError ??
+    redemptionsError;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -147,7 +152,7 @@ export default function PartnerDashboardScreen() {
           <Text style={styles.sectionSubtitle}>
             {brandName
               ? `Overview for ${brandName}`
-              : "Set up your brand by creating your first deal."}
+              : PARTNER_BRAND_REQUIRED_MESSAGE}
           </Text>
         </View>
 

@@ -5,7 +5,8 @@
  * the root of the web repository (`supabase_schema.sql`,
  * `supabase_partner_access.sql`, `supabase_portal_redesign.sql`,
  * `supabase_deal_auto_launch.sql`, `supabase_student_verification.sql`,
- * `supabase_yearly_student_verification.sql`).
+ * `supabase_yearly_student_verification.sql`,
+ * `supabase_push_notifications.sql`).
  */
 
 export type UserRole = "student" | "partner" | "admin";
@@ -22,7 +23,16 @@ export function isUserRole(value: unknown): value is UserRole {
 export type DealType = "Online" | "In-Store";
 
 /** `public.deals.status` */
-export type DealStatus = "pending" | "approved" | "rejected";
+export type DealStatus = "pending" | "approved" | "rejected" | "paused";
+
+/** Row shape of `public.push_tokens`. */
+export interface PushTokenRow {
+  user_id: string;
+  expo_push_token: string;
+  platform: "ios" | "android";
+  updated_at: string;
+  created_at: string;
+}
 
 /** Row shape of `public.user_roles`. */
 export interface UserRoleRow {

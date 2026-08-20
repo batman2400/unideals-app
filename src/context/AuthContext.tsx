@@ -35,12 +35,18 @@ import {
   type ReactNode,
 } from "react";
 
-import { getPasswordResetRedirectUrl } from "@/lib/authDeepLink";
+import {
+  getOAuthRedirectUrl,
+  getPasswordResetRedirectUrl,
+} from "@/lib/authDeepLink";
 import { signInWithGoogle as startGoogleSignIn } from "@/lib/googleAuth";
 import {
   clearCachedUserRole,
+  clearPasswordRecoveryUser,
   readCachedUserRole,
+  readPasswordRecoveryUser,
   writeCachedUserRole,
+  writePasswordRecoveryUser,
   type CachedUserRole,
 } from "@/lib/roleCache";
 import {
@@ -49,6 +55,11 @@ import {
   isStudentVerificationExpiringSoon,
   studentVerificationExpiresAt,
 } from "@/lib/studentVerification";
+import {
+  registerStudentPushToken,
+  subscribeToPushTokenRefresh,
+  unregisterDevicePushToken,
+} from "@/lib/pushNotifications";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { isUserRole, type UserMetadata, type UserRole } from "@/types/database";
 
@@ -330,6 +341,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const applySession = async (
       nextSession: Session | null,
       refreshRoleFromNetwork: boolean,
+      forceRecovery: boolean,
     ): Promise<void> => {
       if (!active) return;
 
@@ -345,11 +357,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setVerifiedAt(null);
         resolvedForUserIdRef.current = null;
         setError(null);
+        setIsPasswordRecovery(false);
         memoryCache = null;
         diskCacheSettled = true;
         setIsLoading(false);
         void clearCachedUserRole();
+        void clearPasswordRecoveryUser();
         return;
+      }
+
+      if (forceRecovery) {
+        setIsPasswordRecovery(true);
+        void writePasswordRecoveryUser(nextUserId);
+      } else {
+        const recoveryUserId = await readPasswordRecoveryUser();
+        if (!active || sessionUserIdRef.current !== nextUserId) return;
+        if (recoveryUserId === nextUserId) {
+          setIsPasswordRecovery(true);
+        }
       }
 
       if (resolvedForUserIdRef.current !== nextUserId) {
@@ -385,7 +410,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const refreshRoleFromNetwork =
           event !== "TOKEN_REFRESHED" && event !== "USER_UPDATED";
-        void applySession(nextSession, refreshRoleFromNetwork);
+        void applySession(
+          nextSession,
+          refreshRoleFromNetwork,
+          event === "PASSWORD_RECOVERY",
+        );
       },
     );
 
@@ -395,6 +424,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       detachRoleChannel();
     };
   }, []);
+
+  const userId = session?.user?.id;
+
+  useEffect(() => {
+    if (isLoading || isPasswordRecovery || !userId) return;
+
+    if (role === "student") {
+      void registerStudentPushToken();
+      return subscribeToPushTokenRefresh();
+    }
+
+    if (role === "partner" || role === "admin") {
+      void unregisterDevicePushToken();
+    }
+  }, [isLoading, isPasswordRecovery, userId, role]);
 
   const refreshRole = useCallback(() => {
     const userId = sessionUserIdRef.current;
@@ -427,6 +471,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: email.trim().toLowerCase(),
         password,
         options: {
+          emailRedirectTo: getOAuthRedirectUrl(),
           data: {
             full_name: details.fullName.trim(),
             username: details.username.trim(),
@@ -448,8 +493,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async (): Promise<AuthResult> => {
+    await unregisterDevicePushToken();
     const { error: signOutError } = await supabase.auth.signOut();
     setIsPasswordRecovery(false);
+    void clearPasswordRecoveryUser();
 
     return {
       error: signOutError
@@ -476,10 +523,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const beginPasswordRecovery = useCallback(() => {
     setIsPasswordRecovery(true);
+    const userId = sessionUserIdRef.current;
+    if (userId) void writePasswordRecoveryUser(userId);
   }, []);
 
   const clearPasswordRecovery = useCallback(() => {
     setIsPasswordRecovery(false);
+    void clearPasswordRecoveryUser();
   }, []);
 
   const user = session?.user ?? null;

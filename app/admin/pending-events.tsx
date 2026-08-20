@@ -1,17 +1,21 @@
 import { Image } from "expo-image";
 import { CalendarDays, Check, MapPin, X } from "lucide-react-native";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
+import { Button } from "@/components/Button";
 import { useAdminPendingEvents } from "@/lib/useAdmin";
 import { colors, radius, spacing } from "@/theme";
 import type { CampusEvent } from "@/types/database";
@@ -197,6 +201,17 @@ export default function AdminPendingEventsScreen() {
     approve,
     reject,
   } = useAdminPendingEvents();
+  const [rejectTarget, setRejectTarget] = useState<CampusEvent | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const confirmAndroidReject = () => {
+    if (!rejectTarget) return;
+    const id = rejectTarget.id;
+    const reason = rejectReason.trim();
+    setRejectTarget(null);
+    setRejectReason("");
+    void reject(id, reason);
+  };
 
   return (
     <View style={styles.root}>
@@ -272,16 +287,59 @@ export default function AdminPendingEventsScreen() {
                 );
               }}
               onReject={() => {
-                void (async () => {
-                  const reason = await promptRejectReason();
-                  if (reason === null) return;
-                  await reject(item.id, reason);
-                })();
+                if (Platform.OS === "ios") {
+                  void (async () => {
+                    const reason = await promptRejectReason();
+                    if (reason === null) return;
+                    await reject(item.id, reason);
+                  })();
+                  return;
+                }
+                setRejectTarget(item);
+                setRejectReason("");
               }}
             />
           );
         }}
       />
+
+      <Modal
+        visible={rejectTarget != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRejectTarget(null)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setRejectTarget(null)}
+        >
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Reject event?</Text>
+            <Text style={styles.modalBody}>
+              Optional reason (leave blank to reject without one).
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={rejectReason}
+              onChangeText={setRejectReason}
+              placeholder="Reason (optional)"
+              placeholderTextColor={colors.inverseOnSurface}
+              multiline
+            />
+            <View style={styles.modalActions}>
+              <Button
+                label="Cancel"
+                variant="ghost"
+                onPress={() => setRejectTarget(null)}
+              />
+              <Button
+                label="Reject"
+                onPress={confirmAndroidReject}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -521,5 +579,43 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: spacing.lg,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  modalCard: {
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceContainerLowest,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.onBackground,
+  },
+  modalBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.onSurfaceVariant,
+  },
+  modalInput: {
+    minHeight: 88,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceContainer,
+    fontSize: 15,
+    color: colors.onSurface,
+    textAlignVertical: "top",
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
   },
 });

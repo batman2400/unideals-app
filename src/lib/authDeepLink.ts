@@ -18,6 +18,7 @@ export interface AuthDeepLinkResult {
 
 /** PKCE codes can only be exchanged once; Linking + AuthSession both fire. */
 let lastConsumedCode: string | null = null;
+const inFlightExchanges = new Map<string, Promise<AuthDeepLinkResult>>();
 
 function parseParams(url: string): Record<string, string> {
   const params: Record<string, string> = {};
@@ -97,27 +98,55 @@ export async function handleAuthDeepLink(
 
   try {
     if (params.code) {
-      if (lastConsumedCode === params.code) {
-        return { handled: true, type, isRecovery, error: null };
-      }
-      lastConsumedCode = params.code;
-
-      const { error } = await supabase.auth.exchangeCodeForSession(params.code);
-      if (error) {
-        return {
-          handled: true,
-          type,
-          isRecovery,
-          error: toErrorMessage(error, "Could not complete sign-in from link."),
-        };
+      const code = params.code;
+      if (lastConsumedCode === code) {
+        return { handled: true, type: null, isRecovery: false, error: null };
       }
 
-      return {
-        handled: true,
-        type,
-        isRecovery,
-        error: null,
-      };
+      const inFlight = inFlightExchanges.get(code);
+      if (inFlight) {
+        return inFlight;
+      }
+
+      const exchange = (async (): Promise<AuthDeepLinkResult> => {
+        try {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            const { data: existing } = await supabase.auth.getSession();
+            if (existing.session) {
+              lastConsumedCode = code;
+              return { handled: true, type, isRecovery, error: null };
+            }
+            return {
+              handled: true,
+              type,
+              isRecovery,
+              error: toErrorMessage(
+                error,
+                "Could not complete sign-in from link.",
+              ),
+            };
+          }
+
+          lastConsumedCode = code;
+          return { handled: true, type, isRecovery, error: null };
+        } catch (caught) {
+          return {
+            handled: true,
+            type,
+            isRecovery,
+            error: toErrorMessage(
+              caught,
+              "Could not process authentication link.",
+            ),
+          };
+        } finally {
+          inFlightExchanges.delete(code);
+        }
+      })();
+
+      inFlightExchanges.set(code, exchange);
+      return exchange;
     }
 
     if (params.access_token && params.refresh_token) {
