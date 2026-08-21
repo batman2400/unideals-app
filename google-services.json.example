@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "646785507229",
-    "project_id": "unideals-6d728",
-    "storage_bucket": "unideals-6d728.firebasestorage.app"
+    "project_number": "YOUR_PROJECT_NUMBER",
+    "project_id": "YOUR_PROJECT_ID",
+    "storage_bucket": "YOUR_PROJECT_ID.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:646785507229:android:97aea0ee6ae5b518889974",
+        "mobilesdk_app_id": "1:YOUR_PROJECT_NUMBER:android:YOUR_APP_ID",
         "android_client_info": {
           "package_name": "co.unideals.app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB-rJdplLATPq3duQ0JxCgVUrmC4H-Aaoc"
+          "current_key": "YOUR_ANDROID_API_KEY"
         }
       ],
       "services": {

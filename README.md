@@ -21,7 +21,12 @@ reliably in a custom development client built with EAS — not Expo Go.
 cd unideals-app
 npm install
 cp .env.example .env   # then fill in the values
+cp google-services.json.example google-services.json
 ```
+
+Download the real `google-services.json` from Firebase (Project settings → Your
+apps → Android `co.unideals.app`) and replace the example file. It is gitignored
+on purpose — do not commit it.
 
 ### Recommended: custom development build (EAS)
 
@@ -195,8 +200,8 @@ npm run build:dev:android
 In [Expo credentials](https://expo.dev/accounts/uvaram2004/projects/unideals-app/credentials):
 
 - **Android:** two Firebase files, both required:
-  1. Download `google-services.json` from Firebase (Project settings → Your apps → Android `co.unideals.app`) and save it as `google-services.json` in this folder. `app.json` already points at it via `android.googleServicesFile`.
-  2. Upload the FCM V1 **service account** key in Expo credentials (that one is for Expo to *send* the push).
+  1. Download `google-services.json` from Firebase (Project settings → Your apps → Android `co.unideals.app`) and save it as `google-services.json` in this folder. `app.json` already points at it via `android.googleServicesFile`. The file is gitignored; EAS still uploads the local copy via `.easignore`.
+  2. Upload the FCM V1 **service account** key in Expo credentials (that one is for Expo to *send* the push). Never commit a `*firebase-adminsdk*.json` file.
 - **iOS:** let EAS manage the APNs key, or upload your own.
 
 Push tokens are only issued on a **physical device** in a custom build — not

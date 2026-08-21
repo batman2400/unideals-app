@@ -13,8 +13,6 @@ ios/
 *.key
 *.mobileprovision
 *firebase-adminsdk*.json
-google-services.json
-GoogleService-Info.plist
 
 .env
 .env.local
@@ -25,3 +23,6 @@ yarn-error.*
 
 .DS_Store
 .idea/
+
+# google-services.json is gitignored but must still be uploaded for Android EAS builds.
+GoogleService-Info.plist
