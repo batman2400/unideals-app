@@ -6,6 +6,16 @@ Supabase project, roles, and branding as the web app.
 This folder is self-contained and can be lifted out into its own repository
 without changes.
 
+## Launch
+
+Google Play is blocked until the security gate is signed off.
+
+1. [LAUNCH.md](LAUNCH.md) — remaining work before security and Play
+2. [SECURITY.md](SECURITY.md) — must-pass checklist (Supabase, Firebase, this app, QA)
+3. [PLAY_STORE.md](PLAY_STORE.md) — developer account, listing, production AAB, review
+
+Do not upload a preview APK to Play. The store binary is the EAS `production` App Bundle.
+
 ## Requirements
 
 - Node.js 20 or newer
