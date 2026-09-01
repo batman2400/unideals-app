@@ -30,6 +30,7 @@ export type SearchScope = "all" | "deals" | "events" | "brands";
 
 type OpenSearchOptions = {
   scope?: SearchScope;
+  query?: string;
 };
 
 type TabBarMotionContextValue = {
@@ -153,17 +154,14 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
         },
       );
 
-      if (options?.scope && options.scope !== "all") {
-        router.navigate({
-          pathname: "/search",
-          params: { scope: options.scope },
-        } as Href);
-      } else {
-        router.navigate({
-          pathname: "/search",
-          params: { scope: "all" },
-        } as Href);
-      }
+      const scope = options?.scope && options.scope !== "all" ? options.scope : "all";
+      router.navigate({
+        pathname: "/search",
+        params: {
+          scope,
+          q: options?.query?.trim() ?? "",
+        },
+      } as Href);
     },
     [
       finishOpen,

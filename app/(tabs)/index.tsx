@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
 import { SaveDealButton } from "@/components/DealCard";
+import { BrandExploreField } from "@/components/BrandExploreField";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { useTabBarCollapseScrollHandler } from "@/context/TabBarMotionContext";
 import {
@@ -119,6 +120,10 @@ export default function HomeScreen() {
           Student perks and campus events, in one place.
         </Text>
       </View>
+
+      <BrandExploreField
+        brandNames={deals.map((deal) => deal.brand).filter(Boolean)}
+      />
 
       {dealsError ? (
         <View style={styles.errorBlock}>

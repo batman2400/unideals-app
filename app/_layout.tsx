@@ -143,6 +143,16 @@ function NavigationGuard() {
           }}
         />
         <Stack.Screen
+          name="brand/[slug]"
+          options={{
+            headerShown: true,
+            title: "Brand",
+            headerTintColor: colors.primary,
+            headerStyle: { backgroundColor: colors.background },
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
           name="event/[id]"
           options={{
             headerShown: true,

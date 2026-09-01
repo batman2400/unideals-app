@@ -1,5 +1,5 @@
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { ChevronLeft, Search, X } from "lucide-react-native";
+import { ChevronLeft, Search } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -25,6 +25,7 @@ import {
   useTabBarMotion,
   type SearchScope,
 } from "@/context/TabBarMotionContext";
+import { brandHubPath, resolveBrandExplore } from "@/lib/brandPath";
 import {
   partitionDeals,
   partitionEvents,
@@ -65,7 +66,10 @@ function asSearchScope(param: string | string[] | undefined): SearchScope {
 export default function SearchScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ scope?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    scope?: string | string[];
+    q?: string | string[];
+  }>();
   const { searchFieldVisible, leaveSearch, morphProgress } = useTabBarMotion();
   const inputRef = useRef<TextInput>(null);
 
@@ -79,11 +83,15 @@ export default function SearchScreen() {
   const [scope, setScope] = useState<SearchScope>(() =>
     asSearchScope(params.scope),
   );
-  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
 
   useEffect(() => {
     setScope(asSearchScope(params.scope));
   }, [params.scope]);
+
+  useEffect(() => {
+    const raw = Array.isArray(params.q) ? params.q[0] : params.q;
+    if (raw !== undefined) setQuery(raw);
+  }, [params.q]);
 
   const focusSearchField = useCallback(() => {
     inputRef.current?.focus();
@@ -138,27 +146,6 @@ export default function SearchScreen() {
     const trimmed = query.trim();
     const next: SearchItem[] = [];
 
-    if (selectedBrand) {
-      const brandDeals = filterDeals(
-        dealPool.filter(
-          (deal) =>
-            deal.brand.trim().toLowerCase() === selectedBrand.toLowerCase(),
-        ),
-        query,
-      );
-      if (brandDeals.length > 0) {
-        next.push({
-          kind: "header",
-          id: "header-brand-deals",
-          title: selectedBrand,
-        });
-        for (const deal of brandDeals) {
-          next.push({ kind: "deal", id: `deal-${deal.id}`, deal });
-        }
-      }
-      return next;
-    }
-
     const matchedBrands =
       scope === "deals" || scope === "events"
         ? []
@@ -172,7 +159,10 @@ export default function SearchScreen() {
         ? []
         : filterEvents(eventPool, query);
 
-    const brandSlice = trimmed ? matchedBrands : matchedBrands.slice(0, 6);
+    const brandSlice =
+      trimmed || scope === "brands"
+        ? matchedBrands
+        : matchedBrands.slice(0, 6);
     const dealSlice = trimmed ? matchedDeals : matchedDeals.slice(0, 8);
     const eventSlice = trimmed ? matchedEvents : matchedEvents.slice(0, 6);
 
@@ -211,7 +201,7 @@ export default function SearchScreen() {
       }
     }
     return next;
-  }, [brands, dealPool, eventPool, query, scope, selectedBrand]);
+  }, [brands, dealPool, eventPool, query, scope]);
 
   const isLoading = dealsLoading || eventsLoading;
   const isRefreshing = dealsRefreshing || eventsRefreshing;
@@ -244,7 +234,11 @@ export default function SearchScreen() {
           <TextInput
             ref={inputRef}
             style={styles.input}
-            placeholder="Search deals, events, and brands"
+            placeholder={
+              scope === "brands"
+                ? "e.g. Spa Ceylon"
+                : "Search deals, events, and brands"
+            }
             placeholderTextColor={colors.inverseOnSurface}
             value={query}
             onChangeText={setQuery}
@@ -256,6 +250,15 @@ export default function SearchScreen() {
             returnKeyType="search"
             showSoftInputOnFocus
             blurOnSubmit={false}
+            onSubmitEditing={() => {
+              const target = resolveBrandExplore(
+                query,
+                brands.map((brand) => brand.name),
+              );
+              if (target.kind === "hub") {
+                router.push(`/brand/${target.slug}` as Href);
+              }
+            }}
           />
         </Animated.View>
       </View>
@@ -266,7 +269,6 @@ export default function SearchScreen() {
             value={scope}
             onChange={(next) => {
               setScope(next);
-              setSelectedBrand(null);
               router.setParams({ scope: next });
             }}
             options={[
@@ -277,23 +279,6 @@ export default function SearchScreen() {
             ]}
           />
         </View>
-
-      {selectedBrand ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Clear ${selectedBrand} filter`}
-          onPress={() => setSelectedBrand(null)}
-          style={({ pressed }) => [
-            styles.brandChip,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.brandChipLabel} numberOfLines={1}>
-            {selectedBrand}
-          </Text>
-          <X color={colors.onPrimary} size={14} strokeWidth={2.4} />
-        </Pressable>
-      ) : null}
 
       {isLoading ? (
         <ListSkeleton count={4} />
@@ -326,7 +311,9 @@ export default function SearchScreen() {
               return (
                 <BrandResultRow
                   brand={item.brand}
-                  onPress={(brand) => setSelectedBrand(brand.name)}
+                  onPress={(brand) =>
+                    router.push(brandHubPath(brand.name) as Href)
+                  }
                 />
               );
             }
@@ -365,11 +352,7 @@ export default function SearchScreen() {
           ListEmptyComponent={
             <View style={styles.stateBlock}>
               <Text style={styles.stateTitle}>
-                {error
-                  ? "Could not load results"
-                  : selectedBrand
-                    ? `No deals for ${selectedBrand}`
-                    : "No matches"}
+                {error ? "Could not load results" : "No matches"}
               </Text>
               <Text style={styles.stateBody}>
                 {error
@@ -431,25 +414,6 @@ const styles = StyleSheet.create({
   scopeWrap: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
-  },
-  brandChip: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    maxWidth: "80%",
-    paddingVertical: spacing.xs,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-  },
-  brandChipLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.onPrimary,
   },
   listContent: {
     paddingHorizontal: spacing.lg,
