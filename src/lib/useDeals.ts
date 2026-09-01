@@ -5,7 +5,8 @@
  * - List: `get_public_deals()` (never returns redemption_code)
  * - Ended offers are dropped from student lists; partners/admins see them
  *   under Finished in their portals.
- * - Detail: `get_public_deal_by_id()` (code only when caller may see it)
+ * - Detail: `get_public_deal_by_id()` (partners/admins may still receive
+ *   `redemption_code`; students should call `reveal_online_deal_code`)
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -200,7 +201,8 @@ export interface UseDealResult {
 
 /**
  * `accessKey` should change when auth/role/verification changes so the detail
- * RPC re-runs and can surface `redemption_code` after verification.
+ * RPC re-runs after verification. Student promo codes come from
+ * `reveal_online_deal_code`, not this fetch.
  */
 export function useDeal(
   id: string | number | undefined,

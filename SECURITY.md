@@ -23,6 +23,12 @@ to the app, or git.
 - [x] In-store tickets via `generate_instore_ticket` / `validate_instore_ticket`
 - [x] `notify-students` Edge Function refuses anything except `service_role`
 
+### After Play ships (not a listing blocker)
+
+- [ ] Apply website SQL `supabase_reveal_deal_code_cutover.sql` so students no
+      longer receive `redemption_code` on deal load. Only after this Reveal
+      build is on Play. See [md/REVEAL_PROMO_CODE.md](md/REVEAL_PROMO_CODE.md).
+
 Do **not** delete or rotate the Android API key for launch. After the first
 Play `.aab`, add the **Play app-signing SHA-1** (see [PLAY_STORE.md](PLAY_STORE.md)).
 
@@ -46,7 +52,7 @@ Audit the live project.
 
 Logged-in **student** (and anon) must fail these:
 
-- [ ] Select `redemption_code` from `deals` (codes only via `get_public_deal_by_id` when allowed)
+- [ ] Select `redemption_code` from `deals` (students get codes only via `reveal_online_deal_code`; deal-load RPC is cut over after this app ships)
 - [ ] Read another student’s `student_redemption_tickets` / ID objects
 - [ ] Insert/update/delete another partner’s deals
 - [ ] `list_users_with_roles`, `admin_list_all_deals`, verification approve/reject
@@ -92,8 +98,10 @@ each skip as an accepted risk in writing.
   - student ID photos
   - camera use (partner QR scanner)
   - push tokens / notifications
-- [ ] Production EAS env: `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` set on the
-      **production** environment so cloud builds do not depend on a laptop `.env`
+- [ ] Production EAS env: `eas.json` `build.production` already has
+      `"environment": "production"`. Set `EXPO_PUBLIC_SUPABASE_URL` and
+      `EXPO_PUBLIC_SUPABASE_ANON_KEY` on the **production** environment in
+      the Expo dashboard so cloud builds do not depend on a laptop `.env`
 
 ---
 

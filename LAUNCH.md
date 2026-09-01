@@ -7,6 +7,10 @@ product is already built. Do **not** start a new feature track.
 2. Sign off [SECURITY.md](SECURITY.md)
 3. Follow [PLAY_STORE.md](PLAY_STORE.md)
 
+**After the app is live on Play:** apply
+`unideals/supabase_reveal_deal_code_cutover.sql` in Supabase (full steps in
+[md/REVEAL_PROMO_CODE.md](md/REVEAL_PROMO_CODE.md)). Do not run it before then.
+
 Do not upload a preview APK to Play. The store binary is the EAS `production`
 App Bundle.
 
@@ -38,17 +42,23 @@ Push pipeline is coded (`notify-students` + SQL files). No in-app payments
 
 These are **not** on SECURITY.md, but they will fail Play review or phone QA.
 
-- [ ] **In-app account deletion** — Play expects it for apps with accounts.
-      Profile only has Sign out (`src/screens/ProfileScreen.tsx`). Privacy
-      currently says email support (`src/lib/legalContent.ts` §8). Add a
-      Profile action that deletes the auth user + related data (or a clearly
-      completable in-app request). Needs a matching Supabase RPC/policy —
-      fold into the security pass.
-- [ ] **ID photo picker permission** — Deal/avatar uploads request library
-      access (`src/components/ImagePickerField.tsx`). Student ID upload does
-      **not** (`src/components/VerificationPanel.tsx` `IdPhotoPicker`). On
-      Android 13+ verification can fail with no useful prompt. Align it with
-      `ImagePickerField`.
+- [ ] **In-app account deletion** — Play requires account deletion **in the
+      app** and via a **public web URL**. Profile only has Sign out
+      (`src/screens/ProfileScreen.tsx`). Privacy currently says email support
+      (`src/lib/legalContent.ts` §8). The client anon key cannot call
+      `supabase.auth.admin.deleteUser()` — that needs the service role.
+
+      Implementation: Profile → Account → Delete account (confirmation
+      alert) plus a hosted page on `unideals.co`. Backend is a Postgres RPC
+      `request_account_deletion()` or a small Edge Function that deletes
+      `auth.users` (cascade) or queues deletion. Fold into the security
+      pass. Never put the service role in Expo env.
+- [x] **ID photo picker permission** — `IdPhotoPicker` in
+      `src/components/VerificationPanel.tsx` now calls
+      `requestMediaLibraryPermissionsAsync()` before
+      `launchImageLibraryAsync()`, matching `ImagePickerField`. Without this,
+      Android 13+ granular media permissions can fail silently on student ID
+      upload.
 - [ ] **Confirm SQL is live** on the shared Supabase project. Repo SQL is
       “run in the editor,” not auto-migrated:
       - `supabase_yearly_student_verification.sql`
@@ -56,17 +66,28 @@ These are **not** on SECURITY.md, but they will fail Play review or phone QA.
       - `supabase_webhook_http_request.sql`
 
       Until yearly SQL is applied, `src/lib/studentVerification.ts` **trusts
-      `is_verified` forever** if `verified_at` is missing. Expired students
-      keep codes.
-- [ ] **Age / school students** — The app has `student_type: "school"` and
-      `high_school_only` events. Terms have **no minimum age**. Play Target
-      audience / Families / Data safety must match this. Decide for v1:
-      university-only (simplest) vs school/under-18 allowed (declare it and
-      tighten copy). Do not leave it implicit.
-- [ ] **Production EAS env** — `eas.json` `preview` has `"environment":
-      "preview"`; `production` does not. A store AAB can ship with missing
-      `EXPO_PUBLIC_SUPABASE_*` and land on `ConfigMissingScreen`. Set this
-      during the security/EAS pass (also listed in SECURITY.md).
+      `is_verified` forever** if `verified_at` is missing (`if (!expires)
+      return true`). Expired students keep codes. Push will not send without
+      the other two scripts + webhooks.
+- [ ] **Age / school students** — The app has `student_type: "school"`
+      (`app/edit-profile.tsx`, `VerificationPanel`) and `high_school_only`
+      events. Terms have **no minimum age**.
+
+      **Play Families Policy:** if Target audience includes under-13 (or
+      the app is declared “designed for children”), the listing falls under
+      Families Policy / COPPA-style rules, device-ID restrictions, and a
+      harder review. Recommended v1: keep school (A/Level, typically 16–19)
+      but target **13 and older**, and state in Data Safety that the app is
+      **not directed at children under 13**. Align `legalContent.ts` with
+      that. Do not leave targeting implicit.
+- [x] **Production EAS env flag** — `eas.json` `build.production` now has
+      `"environment": "production"` (preview already had `"preview"`).
+      Without this, EAS does not inject Dashboard `production` secrets, and
+      the AAB can launch on `ConfigMissingScreen`.
+
+      Still required in the Expo dashboard (also on SECURITY.md): set
+      `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` on the
+      **production** environment.
 
 ---
 
@@ -96,7 +117,8 @@ is the gate.
 
 From [PLAY_STORE.md](PLAY_STORE.md). None of this is missing product code.
 
-- [ ] Host public https privacy/terms (in-app `/privacy` is not enough)
+- [ ] Host public https privacy, terms, **and account deletion**
+      (in-app `/privacy` is not enough; Play also wants a web deletion URL)
 - [ ] Feature graphic **1024×500** — not in `assets/` yet (icon/splash exist)
 - [ ] Screenshots, Data safety, IARC, camera/photo justifications
 - [ ] Reviewer test accounts (student + partner)
@@ -126,11 +148,40 @@ closed testing.
 
 ## Suggested order
 
-1. **This week (small product fixes):** ID picker permission, confirm SQL
-   applied, decide school/under-18, start account-deletion with the security
-   work.
-2. **Security week:** SECURITY.md blockers + preview APK abuse/happy-path QA.
-3. **In parallel:** Play account + listing assets + hosted privacy/terms.
-4. **Then:** bump to `1.0.0`, production AAB, internal track, SHA-1, review.
+```mermaid
+flowchart TD
+  subgraph step1 [Step 1: Quick code]
+    A1[IdPhotoPicker permission]
+    A2[eas.json environment production]
+    A3[In-app account deletion]
+  end
+  subgraph step2 [Step 2: Security and backend]
+    B1[Run SQL on live Supabase]
+    B2[SecureStore session]
+    B3[Cap ID upload size and MIME]
+    B4[Preview APK phone QA]
+  end
+  subgraph step3 [Step 3: Play ops in parallel]
+    C1[Play developer account]
+    C2[Feature graphic and screenshots]
+    C3[Host privacy terms and deletion]
+  end
+  subgraph step4 [Step 4: Submit]
+    D1[Bump 1.0.0 then production AAB]
+  end
+  step1 --> step2
+  step2 --> step4
+  step3 --> step4
+```
+
+1. **Quick code (1–2 days):** ID picker permission and EAS `environment`
+   flag are done. Next: account-deletion button + Edge Function/RPC, then
+   confirm SQL, decide 13+ targeting, start SECURITY.md.
+2. **Security (2–3 days):** SECURITY.md blockers + preview APK
+   abuse/happy-path QA on a real phone.
+3. **In parallel:** Play account ($25), listing assets, hosted
+   privacy/terms/deletion on `unideals.co`.
+4. **Then:** bump to `1.0.0`, production AAB, internal track, Play
+   app-signing SHA-1 on the Firebase Android key, review.
 
 Do **not** port blog, brand directory, impersonation, or iOS before launch.

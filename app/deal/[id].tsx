@@ -1,6 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   BadgeCheck,
   CheckCircle2,
@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/eventTiming";
 import { asHttpUrl } from "@/lib/httpUrl";
 import { asRouteId } from "@/lib/routeParams";
+import { brandHubPath } from "@/lib/brandPath";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { useDeal } from "@/lib/useDeals";
 import { usePartnerBrand } from "@/lib/usePartnerBrand";
@@ -132,7 +134,13 @@ export default function DealDetailScreen() {
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.brand}>{deal.brand}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${deal.brand} brand page`}
+          onPress={() => router.push(brandHubPath(deal.brand) as Href)}
+        >
+          <Text style={styles.brand}>{deal.brand}</Text>
+        </Pressable>
         <Text style={styles.title}>{deal.title}</Text>
         <Text style={styles.discount}>{deal.discount}</Text>
         <View style={styles.metaRow}>
@@ -163,7 +171,6 @@ export default function DealDetailScreen() {
         ) : (
           <OnlineRedemption
             dealId={deal.id}
-            code={deal.redemptionCode}
             storeUrl={deal.storeUrl}
           />
         )}
@@ -238,17 +245,32 @@ function VerificationWall({
   );
 }
 
+function parseRevealCode(data: unknown): string {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (typeof row === "string") return row.trim();
+  if (
+    row &&
+    typeof row === "object" &&
+    "redemption_code" in row &&
+    typeof (row as { redemption_code: unknown }).redemption_code === "string"
+  ) {
+    return (row as { redemption_code: string }).redemption_code.trim();
+  }
+  return "";
+}
+
 function OnlineRedemption({
   dealId,
-  code,
   storeUrl,
 }: {
   dealId: number;
-  code: string | null;
   storeUrl: string | null;
 }) {
   const [revealed, setRevealed] = useState(false);
+  const [revealedCode, setRevealedCode] = useState("");
   const [copied, setCopied] = useState(false);
+  const [revealing, setRevealing] = useState(false);
+  const [revealError, setRevealError] = useState<string | null>(null);
   const [logNotice, setLogNotice] = useState<string | null>(null);
   const safeStoreUrl = asHttpUrl(storeUrl);
 
@@ -263,18 +285,40 @@ function OnlineRedemption({
     }
   }, [dealId]);
 
-  const handleReveal = useCallback(() => {
+  const handleReveal = useCallback(async () => {
+    setRevealing(true);
+    setRevealError(null);
+    const { data, error } = await supabase.rpc("reveal_online_deal_code", {
+      target_deal_id: dealId,
+    });
+    setRevealing(false);
+
+    if (error) {
+      setRevealError(
+        toErrorMessage(error, "Could not reveal this code. Try again."),
+      );
+      return;
+    }
+
+    const nextCode = parseRevealCode(data);
+    if (!nextCode) {
+      setRevealError(
+        "This offer does not currently have a valid redemption code.",
+      );
+      return;
+    }
+
+    setRevealedCode(nextCode);
     setRevealed(true);
-    void logEvent("reveal");
-  }, [logEvent]);
+  }, [dealId]);
 
   const handleCopy = useCallback(async () => {
-    if (!code) return;
-    await Clipboard.setStringAsync(code);
+    if (!revealedCode) return;
+    await Clipboard.setStringAsync(revealedCode);
     setCopied(true);
     void logEvent("copy");
     setTimeout(() => setCopied(false), 2000);
-  }, [code, logEvent]);
+  }, [revealedCode, logEvent]);
 
   const handleStore = useCallback(async () => {
     if (!safeStoreUrl) return;
@@ -282,25 +326,25 @@ function OnlineRedemption({
     await Linking.openURL(safeStoreUrl);
   }, [safeStoreUrl, logEvent]);
 
-  if (!code) {
-    return (
-      <View style={styles.panel}>
-        <Text style={styles.panelBody}>
-          No promo code is available for this deal yet.
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.panel}>
       <Text style={styles.panelTitle}>Online code</Text>
       {!revealed ? (
-        <Button label="Reveal promo code" onPress={handleReveal} />
+        <>
+          <Button
+            label={revealing ? "Checking offer…" : "Reveal promo code"}
+            onPress={() => void handleReveal()}
+            loading={revealing}
+            disabled={revealing}
+          />
+          {revealError ? (
+            <Text style={styles.errorInline}>{revealError}</Text>
+          ) : null}
+        </>
       ) : (
         <>
           <View style={styles.codeBox}>
-            <Text style={styles.codeText}>{code}</Text>
+            <Text style={styles.codeText}>{revealedCode}</Text>
           </View>
           <View style={styles.row}>
             <Button

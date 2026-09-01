@@ -114,6 +114,8 @@ updates) at:
 
 - `https://unideals.co/privacy` (or `/privacy-policy`)
 - `https://unideals.co/terms`
+- Account deletion URL (Play requires this in addition to in-app delete) —
+  e.g. `https://unideals.co/delete-account` or a clear path on the privacy page
 
 Must open in a browser **without** installing the app. Contact:
 `unideals.lk@gmail.com`. In-app `/privacy` is **not** enough for Play.
@@ -306,6 +308,12 @@ code), resubmit.
 ---
 
 ## Phase 8 — After launch
+
+- [ ] **Promo-code cutover (do not skip):** After this Reveal build is on Play
+      and Online Reveal works on a store install, apply
+      `unideals/supabase_reveal_deal_code_cutover.sql` in the Supabase SQL
+      editor. Details: [md/REVEAL_PROMO_CODE.md](md/REVEAL_PROMO_CODE.md).
+      Do **not** apply it before the app is on the store.
 
 `runtimeVersion` follows `appVersion`.
 

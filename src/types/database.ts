@@ -49,8 +49,10 @@ export interface UserRoleRow {
 /**
  * Row returned by the `get_public_deals()` / `get_public_deal_by_id()` RPCs.
  *
- * List RPC omits `redemption_code`. Detail RPC returns it only for verified
- * students, admins, and owning partners — otherwise null.
+ * List RPC omits `redemption_code`. Detail RPC may still return it for
+ * verified students until `supabase_reveal_deal_code_cutover.sql` is applied;
+ * after that, students get the code only from `reveal_online_deal_code`.
+ * Admins and owning partners can still receive it on deal load.
  * Timing / coming-soon fields come from `supabase_coming_soon.sql`.
  */
 export interface PublicDealRow {
@@ -118,6 +120,11 @@ export function mapDeal(row: PublicDealRow): Deal {
 }
 
 export type OnlineCodeEventType = "reveal" | "copy" | "click_through";
+
+/** Row returned by `reveal_online_deal_code()`. */
+export interface RevealDealCodeRow {
+  redemption_code: string;
+}
 
 export interface VerificationRpcResult {
   success?: boolean;
