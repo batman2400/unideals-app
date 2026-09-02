@@ -11,6 +11,7 @@ import {
   Shield,
   ShieldQuestion,
   Store,
+  Trash2,
 } from "lucide-react-native";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
@@ -28,6 +29,7 @@ import { StudentIdCard } from "@/components/StudentIdCard";
 import { VerificationPanel } from "@/components/VerificationPanel";
 import { useAuth } from "@/context/AuthContext";
 import { useTabBarCollapseScrollHandler } from "@/context/TabBarMotionContext";
+import { deleteOwnAccount } from "@/lib/deleteAccount";
 import { formatVerificationExpiry } from "@/lib/studentVerification";
 import { useStudentVerificationRequest } from "@/lib/useVerificationRequest";
 import { floatingTabBarScrollPadding } from "@/lib/tabBar";
@@ -65,6 +67,7 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const onScroll = useTabBarCollapseScrollHandler();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [verificationFormOpen, setVerificationFormOpen] = useState(false);
 
   const isTrusted = isVerified || role === "partner" || role === "admin";
@@ -116,6 +119,40 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
         },
       },
     ]);
+  }, [signOut]);
+
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      "Delete account",
+      "This permanently deletes your Uni Deals login, ID photos, related tickets, and push tokens. Sign out stays separate. You cannot undo this.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete account",
+          style: "destructive",
+          onPress: () => {
+            setIsDeletingAccount(true);
+            void deleteOwnAccount()
+              .then(async () => {
+                const result = await signOut();
+                if (result.error) {
+                  console.error("Sign-out after delete:", result.error);
+                }
+              })
+              .catch((error: unknown) => {
+                const message =
+                  error instanceof Error
+                    ? error.message
+                    : "Could not delete your account. Please try again.";
+                Alert.alert("Could not delete account", message);
+              })
+              .finally(() => {
+                setIsDeletingAccount(false);
+              });
+          },
+        },
+      ],
+    );
   }, [signOut]);
 
   return (
@@ -296,17 +333,33 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
 
       <Pressable
         accessibilityRole="button"
-        disabled={isSigningOut}
+        disabled={isSigningOut || isDeletingAccount}
         onPress={handleSignOut}
         style={({ pressed }) => [
           styles.signOut,
           pressed && styles.signOutPressed,
-          isSigningOut && styles.signOutDisabled,
+          (isSigningOut || isDeletingAccount) && styles.signOutDisabled,
         ]}
       >
         <LogOut color={colors.error} size={18} />
         <Text style={styles.signOutLabel}>
           {isSigningOut ? "Signing out…" : "Sign out"}
+        </Text>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={isDeletingAccount || isSigningOut}
+        onPress={handleDeleteAccount}
+        style={({ pressed }) => [
+          styles.deleteAccount,
+          pressed && styles.signOutPressed,
+          (isDeletingAccount || isSigningOut) && styles.signOutDisabled,
+        ]}
+      >
+        <Trash2 color={colors.onErrorContainer} size={18} />
+        <Text style={styles.deleteAccountLabel}>
+          {isDeletingAccount ? "Deleting…" : "Delete account"}
         </Text>
       </Pressable>
     </Animated.ScrollView>
@@ -420,6 +473,15 @@ const styles = StyleSheet.create({
     borderColor: colors.errorContainer,
     backgroundColor: colors.surfaceContainerLowest,
   },
+  deleteAccount: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    minHeight: MIN_TAP_TARGET,
+    borderRadius: radius.lg,
+    backgroundColor: colors.errorContainer,
+  },
   signOutPressed: {
     opacity: 0.85,
   },
@@ -430,5 +492,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: colors.error,
+  },
+  deleteAccountLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.onErrorContainer,
   },
 });

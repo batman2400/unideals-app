@@ -124,42 +124,83 @@ export default function CreateEventScreen() {
     setError(null);
 
     try {
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      const organizerId = authUser?.id ?? user.id;
+      if (!organizerId) {
+        throw new Error("You must be signed in to submit an event.");
+      }
+
       let coverImageUrl: string | null = null;
       if (image) {
-        const uploaded = await uploadEventImage({
-          uri: image.uri,
-          userId: user.id,
-          mimeType: image.mimeType,
-          fileSize: image.fileSize,
-        });
-        coverImageUrl = uploaded.publicUrl;
+        try {
+          const uploaded = await uploadEventImage({
+            uri: image.uri,
+            userId: organizerId,
+            mimeType: image.mimeType,
+            fileSize: image.fileSize,
+          });
+          coverImageUrl = uploaded.publicUrl;
+        } catch (uploadErr) {
+          const uploadMessage = toErrorMessage(
+            uploadErr,
+            "Could not upload cover image.",
+          );
+          if (/row-level security/i.test(uploadMessage)) {
+            throw new Error(
+              "Cover image could not be uploaded. Try a JPEG or PNG under 5MB, or submit without an image.",
+            );
+          }
+          throw uploadErr;
+        }
       }
 
-      const payload: Record<string, unknown> = {
-        title: title.trim(),
-        description: description.trim() || null,
-        category,
-        university_name: universityName.trim() || null,
-        club_name: clubName.trim() || null,
-        location_name: locationName.trim() || null,
-        target_audience: targetAudience,
-        external_registration_url: registrationUrl,
-        cover_image_url: coverImageUrl,
-        start_time: startAt.toISOString(),
-        publish_at: (publishAt ?? new Date()).toISOString(),
-        organizer_id: user.id,
-        status: "pending",
+      const rpcArgs = {
+        p_title: title.trim(),
+        p_description: description.trim() || null,
+        p_start_time: startAt.toISOString(),
+        p_end_time: endAt ? endAt.toISOString() : null,
+        p_publish_at: (publishAt ?? new Date()).toISOString(),
+        p_location_name: locationName.trim() || null,
+        p_category: category,
+        p_university_name: universityName.trim() || null,
+        p_club_name: clubName.trim() || null,
+        p_cover_image_url: coverImageUrl,
+        p_target_audience: targetAudience,
+        p_external_registration_url: registrationUrl,
       };
 
-      if (endAt) {
-        payload.end_time = endAt.toISOString();
+      const { error: rpcError } = await supabase.rpc(
+        "submit_pending_event",
+        rpcArgs,
+      );
+
+      if (rpcError && /could not find the function/i.test(rpcError.message)) {
+        const { error: insertError } = await supabase.from("events").insert([
+          {
+            title: rpcArgs.p_title,
+            description: rpcArgs.p_description,
+            start_time: rpcArgs.p_start_time,
+            end_time: rpcArgs.p_end_time,
+            publish_at: rpcArgs.p_publish_at,
+            location_name: rpcArgs.p_location_name,
+            category: rpcArgs.p_category,
+            university_name: rpcArgs.p_university_name,
+            club_name: rpcArgs.p_club_name,
+            cover_image_url: rpcArgs.p_cover_image_url,
+            target_audience: rpcArgs.p_target_audience,
+            external_registration_url: rpcArgs.p_external_registration_url,
+            organizer_id: organizerId,
+            status: "pending",
+          },
+        ]);
+        if (insertError) throw insertError;
+      } else if (rpcError) {
+        throw rpcError;
       }
-
-      const { error: insertError } = await supabase
-        .from("events")
-        .insert([payload]);
-
-      if (insertError) throw insertError;
 
       allowLeave();
       Alert.alert(
@@ -168,7 +209,12 @@ export default function CreateEventScreen() {
         [{ text: "OK", onPress: () => router.back() }],
       );
     } catch (caught) {
-      setError(toErrorMessage(caught, "Failed to create event."));
+      const message = toErrorMessage(caught, "Failed to create event.");
+      setError(
+        /row-level security/i.test(message)
+          ? "Could not save this event. Sign out, sign back in, and try again. If you added a cover image, try submitting once without it."
+          : message,
+      );
     } finally {
       inFlightRef.current = false;
       setIsSubmitting(false);
@@ -238,12 +284,12 @@ export default function CreateEventScreen() {
         />
 
         <DateTimeField
-          label="Start"
+          label="Start date & time"
           value={startAt}
           onChange={setStartAt}
         />
         <DateTimeField
-          label="End"
+          label="End date & time"
           value={endAt}
           onChange={setEndAt}
           optional

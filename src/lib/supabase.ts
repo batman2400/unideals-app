@@ -4,8 +4,8 @@
  * Port of the web app's `src/lib/supabaseClient.js`. Two things differ on
  * mobile:
  *
- *  1. Sessions persist through `@react-native-async-storage/async-storage`
- *     instead of `localStorage`.
+ *  1. Sessions persist through Expo SecureStore (chunked) instead of
+ *     AsyncStorage / `localStorage`. Web still uses AsyncStorage.
  *  2. Token auto-refresh is tied to app foreground state, because timers are
  *     throttled or suspended while the app is backgrounded.
  *
@@ -15,10 +15,11 @@
  */
 import "./polyfillWebCrypto";
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Constants from "expo-constants";
 import { AppState, type AppStateStatus } from "react-native";
+
+import { getAuthStorage } from "@/lib/secureAuthStorage";
 
 interface SupabaseExtra {
   supabaseUrl?: string;
@@ -60,7 +61,7 @@ export const supabase: SupabaseClient = createClient(
   supabaseAnonKey ?? "placeholder-anon-key",
   {
     auth: {
-      ...(canUseNativeStorage ? { storage: AsyncStorage } : {}),
+      ...(canUseNativeStorage ? { storage: getAuthStorage() } : {}),
       autoRefreshToken: true,
       persistSession: canUseNativeStorage,
       flowType: "pkce",

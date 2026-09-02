@@ -10,6 +10,7 @@ without changes.
 
 Google Play is blocked until the security gate is signed off.
 
+0. [REMAINING_WORK.md](REMAINING_WORK.md) — **do this in this order** (website first, then app)
 1. [LAUNCH.md](LAUNCH.md) — remaining work before security and Play
 2. [SECURITY.md](SECURITY.md) — must-pass checklist (Supabase, Firebase, this app, QA)
 3. [PLAY_STORE.md](PLAY_STORE.md) — developer account, listing, production AAB, review

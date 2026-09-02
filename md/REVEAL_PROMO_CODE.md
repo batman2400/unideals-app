@@ -1,5 +1,7 @@
 # App ticket — Promo-code Reveal (Batch A3)
 
+Full remaining order: [REMAINING_WORK.md](../REMAINING_WORK.md). Cutover is **step 16**, after a store Reveal.
+
 Website playbook: `unideals/LAUNCH_HARDENING_PLAYBOOK.md` (Batch A3).
 
 ## After this app is on the Play Store — do this

@@ -20,6 +20,9 @@ GoogleService-Info.plist
 .env.local
 .env.*.local
 
+# Local Supabase CLI cache (linked project ref).
+supabase/.temp/
+
 npm-debug.*
 yarn-error.*
 

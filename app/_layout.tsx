@@ -14,6 +14,7 @@ import { ConfigMissingScreen } from "@/components/ConfigMissingScreen";
 import { SearchMorph } from "@/components/SearchMorph";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { TabBarMotionProvider } from "@/context/TabBarMotionContext";
+import { applyExpoUpdateIfAvailable } from "@/lib/applyExpoUpdate";
 import { handleAuthDeepLink } from "@/lib/authDeepLink";
 import {
   consumeInitialPushTarget,
@@ -25,6 +26,7 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 import { colors } from "@/theme";
 
 void SplashScreen.preventAutoHideAsync();
+void applyExpoUpdateIfAvailable();
 
 /** Avoid re-processing the launch URL on Fast Refresh / guard remounts. */
 let didConsumeInitialAuthUrl = false;

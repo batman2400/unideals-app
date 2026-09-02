@@ -3,11 +3,13 @@
  *
  * Tokens live in `public.push_tokens` (see supabase_push_notifications.sql).
  * Sending is a Supabase Edge Function, not this module.
+ *
+ * Native modules (`expo-notifications`, `expo-device`) are loaded lazily so
+ * Expo Go and older development APKs can still boot. Push is a no-op there.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
+import { requireOptionalNativeModule } from "expo-modules-core";
 import { Platform } from "react-native";
 
 import { supabase } from "@/lib/supabase";
@@ -20,18 +22,20 @@ export interface PushTarget {
   id: string;
 }
 
-let didConsumeInitialResponse = false;
+type NotificationsModule = typeof import("expo-notifications");
 
-if (Platform.OS !== "web") {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
+interface NotificationResponseLike {
+  notification: {
+    request: {
+      content: {
+        data?: unknown;
+      };
+    };
+  };
 }
+
+let didConsumeInitialResponse = false;
+let notificationsModule: NotificationsModule | null | undefined;
 
 function easProjectId(): string | null {
   const fromEas = Constants.easConfig?.projectId;
@@ -43,6 +47,37 @@ function easProjectId(): string | null {
 
 function canUsePush(): boolean {
   return Platform.OS === "ios" || Platform.OS === "android";
+}
+
+function nativePushAvailable(): boolean {
+  return requireOptionalNativeModule("ExpoPushTokenManager") != null;
+}
+
+function getNotifications(): NotificationsModule | null {
+  if (notificationsModule !== undefined) return notificationsModule;
+  if (!canUsePush() || !nativePushAvailable()) {
+    notificationsModule = null;
+    return null;
+  }
+
+  try {
+    const Notifications = require("expo-notifications") as NotificationsModule;
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+    notificationsModule = Notifications;
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : String(caught);
+    console.warn("[push] Native notifications unavailable:", message);
+    notificationsModule = null;
+  }
+
+  return notificationsModule;
 }
 
 async function readCachedToken(): Promise<string | null> {
@@ -69,7 +104,9 @@ async function clearCachedToken(): Promise<void> {
   }
 }
 
-async function ensureAndroidChannel(): Promise<void> {
+async function ensureAndroidChannel(
+  Notifications: NotificationsModule,
+): Promise<void> {
   if (Platform.OS !== "android") return;
   await Notifications.setNotificationChannelAsync(PUSH_CHANNEL_ID, {
     name: "Deals and events",
@@ -77,7 +114,9 @@ async function ensureAndroidChannel(): Promise<void> {
   });
 }
 
-async function permissionsGranted(): Promise<boolean> {
+async function permissionsGranted(
+  Notifications: NotificationsModule,
+): Promise<boolean> {
   const existing = await Notifications.getPermissionsAsync();
   if (existing.granted) return true;
   if (existing.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
@@ -92,16 +131,17 @@ async function permissionsGranted(): Promise<boolean> {
 
 /**
  * Ask for permission (students only) and upsert this device token.
- * No-ops on web, simulators, and when permission is denied.
+ * No-ops on web, simulators, older APKs, and when permission is denied.
  */
 export async function registerStudentPushToken(): Promise<void> {
-  if (!canUsePush() || !Device.isDevice) return;
+  const Notifications = getNotifications();
+  if (!Notifications) return;
 
   try {
-    const allowed = await permissionsGranted();
+    const allowed = await permissionsGranted(Notifications);
     if (!allowed) return;
 
-    await ensureAndroidChannel();
+    await ensureAndroidChannel(Notifications);
 
     const projectId = easProjectId();
     const tokenResponse = await Notifications.getExpoPushTokenAsync(
@@ -171,7 +211,7 @@ export function targetFromPushData(
 }
 
 function targetFromResponse(
-  response: Notifications.NotificationResponse | null,
+  response: NotificationResponseLike | null,
 ): PushTarget | null {
   if (!response) return null;
   const data = response.notification.request.content.data;
@@ -183,6 +223,8 @@ function targetFromResponse(
 export function consumeInitialPushTarget(): PushTarget | null {
   if (didConsumeInitialResponse || !canUsePush()) return null;
   didConsumeInitialResponse = true;
+  const Notifications = getNotifications();
+  if (!Notifications) return null;
   try {
     const target = targetFromResponse(Notifications.getLastNotificationResponse());
     Notifications.clearLastNotificationResponse();
@@ -195,7 +237,8 @@ export function consumeInitialPushTarget(): PushTarget | null {
 export function subscribeToPushResponses(
   onTarget: (target: PushTarget) => void,
 ): () => void {
-  if (!canUsePush()) return () => {};
+  const Notifications = getNotifications();
+  if (!Notifications) return () => {};
 
   const subscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
@@ -208,7 +251,8 @@ export function subscribeToPushResponses(
 }
 
 export function subscribeToPushTokenRefresh(): () => void {
-  if (!canUsePush()) return () => {};
+  const Notifications = getNotifications();
+  if (!Notifications) return () => {};
 
   const subscription = Notifications.addPushTokenListener(() => {
     void registerStudentPushToken();

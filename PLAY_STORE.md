@@ -1,7 +1,10 @@
 # Uni Deals — Google Play Store plan
 
-**Do not start Phase 1 (Play account, listing, or production AAB) until every
-Blocker in [SECURITY.md](SECURITY.md) is checked off.**
+**Do not start Phase 1 (Play account, listing, or upload) until every
+Blocker in [SECURITY.md](SECURITY.md) is checked off.** Remaining work is
+the short list in [LAUNCH.md](LAUNCH.md). A production AAB **1.0.0**
+(versionCode 2) already exists on Expo — do not rebuild unless native or
+config changed. Do not `eas submit` until that list is done.
 
 Expo app `unideals-app`. Package **`co.unideals.app`** (locked on first Play
 upload — do not change). Expo owner: `uvaram2004`. Firebase: `unideals-6d728`.
@@ -27,7 +30,7 @@ The store binary is a **production App Bundle (`.aab`)**, not a preview APK.
 |---|---|
 | Package name | `co.unideals.app` |
 | App name | Uni Deals |
-| User-facing version | `0.1.0` in `app.json` — bump to `1.0.0` before the first store build |
+| User-facing version | `1.0.0` in `app.json` (store AAB already built; commit if still local-only) |
 | Version code | EAS remote (`appVersionSource: "remote"` + `autoIncrement`) |
 | Production profile | `eas.json` → `production` (AAB, channel `production`) |
 | Submit profile | `eas.json` → `submit.production` |
@@ -217,10 +220,14 @@ Do **not** delete or rotate the Android API key for this launch.
 ### Before `eas build`
 
 - [ ] [SECURITY.md](SECURITY.md) signed off
-- [ ] Bump `expo.version` in `app.json` from `0.1.0` to `1.0.0` (user-visible). Leave version code to EAS.
+- [x] Bump `expo.version` in `app.json` to `1.0.0` (done; versionCode is EAS remote)
 - [ ] `google-services.json` on the machine that runs the build
 - [ ] `eas login` as `uvaram2004`
 - [ ] Smoke-test the latest **preview** build once more
+
+A production AAB **1.0.0** (versionCode 2) is already on Expo. Rebuild only if
+native or config changed. Do not upload until [LAUNCH.md](LAUNCH.md) remaining
+work is done.
 
 ### Build
 

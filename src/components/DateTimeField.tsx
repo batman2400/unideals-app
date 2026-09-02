@@ -1,12 +1,16 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { Calendar, Clock } from "lucide-react-native";
 
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 
@@ -18,64 +22,35 @@ interface DateTimeFieldProps {
   optional?: boolean;
 }
 
+type PickerStep = "date" | "time" | null;
+
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-function toDatePart(value: Date): string {
-  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
-}
-
-function toTimePart(value: Date): string {
-  return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
-}
-
-function parseParts(datePart: string, timePart: string): Date | null {
-  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart.trim());
-  const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timePart.trim());
-  if (!dateMatch || !timeMatch) return null;
-
-  const year = Number(dateMatch[1]);
-  const month = Number(dateMatch[2]) - 1;
-  const day = Number(dateMatch[3]);
-  const hour = Number(timeMatch[1]);
-  const minute = Number(timeMatch[2]);
-
-  if (
-    month < 0 ||
-    month > 11 ||
-    day < 1 ||
-    day > 31 ||
-    hour < 0 ||
-    hour > 23 ||
-    minute < 0 ||
-    minute > 59
-  ) {
-    return null;
-  }
-
-  const next = new Date(year, month, day, hour, minute, 0, 0);
-  if (Number.isNaN(next.getTime())) return null;
+function withTime(datePart: Date, timePart: Date): Date {
+  const next = new Date(datePart);
+  next.setHours(timePart.getHours(), timePart.getMinutes(), 0, 0);
   return next;
 }
 
-function formatValue(value: Date | null): string {
-  if (!value) return "Tap to choose";
-  return value.toLocaleString("en-US", {
+function formatDate(value: Date | null): string {
+  if (!value) return "Pick date";
+  return value.toLocaleDateString("en-US", {
+    weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
   });
 }
 
+function formatTime(value: Date | null): string {
+  if (!value) return "Pick time";
+  return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
 /**
- * JS-only date/time field.
- *
- * Avoids `@react-native-community/datetimepicker` so the current development
- * client can run without a native rebuild. Swap back after the next
- * `expo run:android` / EAS build if you want the system picker.
+ * Native Android/iOS date and time dialogs as two separate selectors.
  */
 export function DateTimeField({
   label,
@@ -84,42 +59,84 @@ export function DateTimeField({
   hint,
   optional = false,
 }: DateTimeFieldProps) {
-  const [open, setOpen] = useState(false);
-  const initial = useMemo(() => value ?? new Date(), [value]);
-  const [datePart, setDatePart] = useState(toDatePart(initial));
-  const [timePart, setTimePart] = useState(toTimePart(initial));
-  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<PickerStep>(null);
+  const [iosOpen, setIosOpen] = useState(false);
+  const [iosDraft, setIosDraft] = useState(() => value ?? new Date());
 
-  const openEditor = () => {
-    const seed = value ?? new Date();
-    setDatePart(toDatePart(seed));
-    setTimePart(toTimePart(seed));
-    setError(null);
-    setOpen(true);
-  };
+  const seed = value ?? new Date();
 
-  const save = () => {
-    const parsed = parseParts(datePart, timePart);
-    if (!parsed) {
-      setError("Use date as YYYY-MM-DD and time as HH:MM.");
+  const openStep = (next: Exclude<PickerStep, null>) => {
+    if (Platform.OS === "ios") {
+      setIosDraft(seed);
+      setIosOpen(true);
       return;
     }
-    onChange(parsed);
-    setOpen(false);
+    setStep(next);
+  };
+
+  const onAndroidChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (event.type !== "set" || !selected) {
+      setStep(null);
+      return;
+    }
+
+    if (step === "date") {
+      const next = value
+        ? withTime(selected, value)
+        : withTime(selected, new Date(seed.getFullYear(), seed.getMonth(), seed.getDate(), 9, 0, 0, 0));
+      onChange(next);
+      setStep(null);
+      return;
+    }
+
+    if (step === "time") {
+      const dateBase = value ?? seed;
+      onChange(withTime(dateBase, selected));
+      setStep(null);
+    }
   };
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable
-        accessibilityRole="button"
-        onPress={openEditor}
-        style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
-      >
-        <Text style={[styles.value, !value && styles.placeholder]}>
-          {formatValue(value)}
-        </Text>
-      </Pressable>
+      <View style={styles.row}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${label} date`}
+          onPress={() => openStep("date")}
+          style={({ pressed }) => [
+            styles.trigger,
+            styles.half,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Calendar size={18} color={colors.primary} />
+          <Text
+            style={[styles.value, !value && styles.placeholder]}
+            numberOfLines={1}
+          >
+            {formatDate(value)}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${label} time`}
+          onPress={() => openStep("time")}
+          style={({ pressed }) => [
+            styles.trigger,
+            styles.half,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Clock size={18} color={colors.primary} />
+          <Text
+            style={[styles.value, !value && styles.placeholder]}
+            numberOfLines={1}
+          >
+            {formatTime(value)}
+          </Text>
+        </Pressable>
+      </View>
       {optional && value ? (
         <Pressable onPress={() => onChange(null)} style={styles.clear}>
           <Text style={styles.clearText}>Clear</Text>
@@ -127,50 +144,56 @@ export function DateTimeField({
       ) : null}
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
 
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.sheetTitle}>{label}</Text>
-            <Text style={styles.fieldLabel}>Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.input}
-              value={datePart}
-              onChangeText={setDatePart}
-              placeholder="2026-08-15"
-              placeholderTextColor={colors.inverseOnSurface}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={styles.fieldLabel}>Time (HH:MM, 24h)</Text>
-            <TextInput
-              style={styles.input}
-              value={timePart}
-              onChangeText={setTimePart}
-              placeholder="14:30"
-              placeholderTextColor={colors.inverseOnSurface}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <View style={styles.actions}>
-              <Pressable onPress={() => setOpen(false)} style={styles.actionBtn}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={save}
-                style={[styles.actionBtn, styles.saveBtn]}
-              >
-                <Text style={styles.saveText}>Save</Text>
-              </Pressable>
-            </View>
+      {Platform.OS === "android" && step ? (
+        <DateTimePicker
+          value={seed}
+          mode={step}
+          display="default"
+          onChange={onAndroidChange}
+        />
+      ) : null}
+
+      {Platform.OS === "ios" ? (
+        <Modal
+          visible={iosOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIosOpen(false)}
+        >
+          <Pressable style={styles.backdrop} onPress={() => setIosOpen(false)}>
+            <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.sheetTitle}>{label}</Text>
+              <DateTimePicker
+                value={iosDraft}
+                mode="datetime"
+                display="spinner"
+                themeVariant="light"
+                accentColor={colors.primary}
+                onChange={(_event, next) => {
+                  if (next) setIosDraft(next);
+                }}
+              />
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => setIosOpen(false)}
+                  style={styles.actionBtn}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    onChange(iosDraft);
+                    setIosOpen(false);
+                  }}
+                  style={[styles.actionBtn, styles.saveBtn]}
+                >
+                  <Text style={styles.saveText}>Save</Text>
+                </Pressable>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -186,20 +209,30 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.onSurfaceVariant,
   },
+  row: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  half: {
+    flex: 1,
+  },
   trigger: {
     minHeight: MIN_TAP_TARGET + 4,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
     backgroundColor: colors.surfaceContainerLowest,
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   pressed: {
     opacity: 0.9,
   },
   value: {
-    fontSize: 15,
+    flex: 1,
+    fontSize: 14,
     fontWeight: "600",
     color: colors.onSurface,
   },
@@ -237,26 +270,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.onBackground,
     marginBottom: spacing.sm,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.onSurfaceVariant,
-  },
-  input: {
-    minHeight: MIN_TAP_TARGET,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-    backgroundColor: colors.background,
-    fontSize: 15,
-    color: colors.onSurface,
-  },
-  error: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.error,
   },
   actions: {
     flexDirection: "row",

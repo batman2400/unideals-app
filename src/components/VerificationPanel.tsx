@@ -9,7 +9,11 @@ import { useAuth } from "@/context/AuthContext";
 import { isAllowedStudentEmail } from "@/lib/studentEmailDomain";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { isVerificationInFlight } from "@/lib/useVerificationRequest";
-import { uploadVerificationImage } from "@/lib/verificationDocuments";
+import {
+  ID_UPLOAD_MAX_BYTES,
+  assertIdImageType,
+  uploadVerificationImage,
+} from "@/lib/verificationDocuments";
 import { colors, radius, spacing } from "@/theme";
 import type {
   InstitutionType,
@@ -606,19 +610,42 @@ function IdPhotoPicker({
   onChange: (next: ProofAsset) => void;
 }) {
   const pick = useCallback(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        "Permission needed",
+        "Allow photo library access so you can upload student ID proof.",
+      );
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       quality: 0.85,
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
-    if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+    if (asset.fileSize != null && asset.fileSize > ID_UPLOAD_MAX_BYTES) {
       Alert.alert("Image too large", "Please choose an image under 5MB.");
+      return;
+    }
+    let mimeType: string;
+    try {
+      mimeType = assertIdImageType(asset.mimeType, asset.fileName);
+    } catch (error) {
+      Alert.alert(
+        "Unsupported image",
+        error instanceof Error
+          ? error.message
+          : "Please upload a JPEG, PNG, or WEBP image.",
+      );
       return;
     }
     onChange({
       uri: asset.uri,
-      mimeType: asset.mimeType ?? "image/jpeg",
+      mimeType,
       fileName: asset.fileName ?? null,
     });
   }, [onChange]);

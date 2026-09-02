@@ -44,7 +44,8 @@ export async function uploadEventImage(
   }
 
   const ext = extensionFromUri(input.uri, input.mimeType);
-  const filePath = `events/${input.userId}/${Date.now()}-${randomSuffix()}.${ext}`;
+  // Must be `{userId}/...` — storage RLS checks foldername(name)[1] = auth.uid()
+  const filePath = `${input.userId}/${Date.now()}-${randomSuffix()}.${ext}`;
   const contentType = input.mimeType?.startsWith("image/")
     ? input.mimeType
     : `image/${ext === "jpg" ? "jpeg" : ext}`;
