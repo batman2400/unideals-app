@@ -1,14 +1,23 @@
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { FormField } from "@/components/FormField";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import { Select } from "@/components/Select";
 import { useAuth } from "@/context/AuthContext";
 import { isAllowedStudentEmail } from "@/lib/studentEmailDomain";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { isVerificationInFlight } from "@/lib/useVerificationRequest";
+import {
+  OTHER_UNIVERSITY,
+  emailMatchesUniversity,
+  findUniversityByEmail,
+  mergeUniversityOptions,
+  type UniversityDomainRow,
+  type UniversityOption,
+} from "@/lib/universities";
 import {
   ID_UPLOAD_MAX_BYTES,
   assertIdImageType,
@@ -58,12 +67,22 @@ export function VerificationPanel({
     isSchoolStudent ? "manual" : "email_otp",
   );
   const [allowedDomains, setAllowedDomains] = useState<string[]>([]);
+  const [dbUniversities, setDbUniversities] = useState<UniversityDomainRow[]>(
+    [],
+  );
   const [domainsError, setDomainsError] = useState<string | null>(null);
   const [domainsLoading, setDomainsLoading] = useState(false);
 
+  const universities = useMemo(
+    () => mergeUniversityOptions(dbUniversities),
+    [dbUniversities],
+  );
+
   const loadAllowedDomains = useCallback(async () => {
     setDomainsLoading(true);
-    const { data, error } = await supabase.from("allowed_domains").select("domain");
+    const { data, error } = await supabase
+      .from("allowed_domains")
+      .select("domain, institution_name");
     if (error) {
       setDomainsError(
         toErrorMessage(error, "Could not load the university email list."),
@@ -72,10 +91,12 @@ export function VerificationPanel({
       return;
     }
 
+    const rows = (data ?? []) as UniversityDomainRow[];
     setDomainsError(null);
+    setDbUniversities(rows);
     setAllowedDomains(
-      (data ?? [])
-        .map((row: { domain: string }) => row.domain.toLowerCase())
+      rows
+        .map((row) => String(row.domain ?? "").trim().toLowerCase())
         .filter(Boolean),
     );
     setDomainsLoading(false);
@@ -89,6 +110,35 @@ export function VerificationPanel({
     if (isSchoolStudent) setPath("manual");
   }, [isSchoolStudent]);
 
+  const otpSection = !isSchoolStudent ? (
+    <>
+      {domainsError ? (
+        <View style={styles.rejectBox}>
+          <Text style={styles.rejectTitle}>
+            Could not load the university email list
+          </Text>
+          <Text style={styles.rejectBody}>{domainsError}</Text>
+          <Button
+            label={domainsLoading ? "Retrying…" : "Retry"}
+            loading={domainsLoading}
+            variant="ghost"
+            onPress={() => void loadAllowedDomains()}
+          />
+        </View>
+      ) : null}
+      <EmailOtpForm
+        allowedDomains={allowedDomains}
+        universities={universities}
+        intro={
+          inFlight
+            ? "Have a university email? Choose your university and enter the code we send to verify immediately without waiting for ID review."
+            : "Choose your university, then enter the 6-digit code we send. A correct code verifies you straight away. Status lasts 12 months."
+        }
+        onSubmitted={onRequestChange}
+      />
+    </>
+  ) : null;
+
   if (inFlight) {
     return (
       <View style={styles.card}>
@@ -96,10 +146,9 @@ export function VerificationPanel({
           {renewal ? "Renewal pending" : "Verification pending"}
         </Text>
         <Text style={styles.pending}>
-          {requestStatus === "awaiting_confirmation"
-            ? "We confirmed your university inbox. An admin will check both sides of your student ID next."
-            : "Both sides of your student ID are with an admin for review."}
+          Both sides of your student ID are with an admin for review.
         </Text>
+        {otpSection}
       </View>
     );
   }
@@ -154,15 +203,15 @@ export function VerificationPanel({
             {rejectReason?.trim() || "Please submit a clearer request."}
           </Text>
           <Text style={styles.body}>
-            You can submit again with a clear photo of the front and back of your
-            student ID.
+            Use your university email if you have one, or submit again with a
+            clear photo of the front and back of your student ID.
           </Text>
         </View>
       ) : (
         <Text style={styles.body}>
           {isSchoolStudent
             ? "School students send both sides of a student ID for admin review. Verification is valid for 12 months."
-            : "Use a university email so we can confirm your inbox, then an admin checks your ID. Without an institute email, use manual verification. Status is valid for 12 months."}
+            : "A correct code sent to your university email verifies you immediately. Upload a student ID only if you do not have an institute email."}
         </Text>
       )}
 
@@ -178,27 +227,7 @@ export function VerificationPanel({
       )}
 
       {path === "email_otp" && !isSchoolStudent ? (
-        <>
-          {domainsError ? (
-            <View style={styles.rejectBox}>
-              <Text style={styles.rejectTitle}>
-                Could not load the university email list
-              </Text>
-              <Text style={styles.rejectBody}>{domainsError}</Text>
-              <Button
-                label={domainsLoading ? "Retrying…" : "Retry"}
-                loading={domainsLoading}
-                variant="ghost"
-                onPress={() => void loadAllowedDomains()}
-              />
-            </View>
-          ) : null}
-          <EmailOtpForm
-            userId={user?.id}
-            allowedDomains={allowedDomains}
-            onSubmitted={onRequestChange}
-          />
-        </>
+        otpSection
       ) : (
         <ManualForm
           userId={user?.id}
@@ -216,25 +245,38 @@ export function VerificationPanel({
 }
 
 function EmailOtpForm({
-  userId,
   allowedDomains,
+  universities,
+  intro,
   onSubmitted,
 }: {
-  userId: string | undefined;
   allowedDomains: readonly string[];
+  universities: readonly UniversityOption[];
+  intro: string;
   onSubmitted: () => void;
 }) {
   const [uniEmail, setUniEmail] = useState("");
-  const [institution, setInstitution] = useState("");
-  const [course, setCourse] = useState("");
-  const [studentId, setStudentId] = useState("");
-  const [front, setFront] = useState<ProofAsset | null>(null);
-  const [back, setBack] = useState<ProofAsset | null>(null);
+  const [selectedUni, setSelectedUni] = useState("");
+  const [otherUniName, setOtherUniName] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [otpCode, setOtpCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  const uniOptions = useMemo(
+    () => [
+      { value: "", label: "Select your university" },
+      { value: OTHER_UNIVERSITY, label: "Other / not listed" },
+      ...universities.map((uni) => ({ value: uni.name, label: uni.name })),
+    ],
+    [universities],
+  );
+
+  const chosenUniversityName = useCallback(() => {
+    if (selectedUni === OTHER_UNIVERSITY) return otherUniName.trim();
+    return selectedUni.trim();
+  }, [otherUniName, selectedUni]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -242,20 +284,43 @@ function EmailOtpForm({
     return () => clearTimeout(id);
   }, [resendCooldown]);
 
+  const applyEmailUniversityMatch = useCallback(
+    (email: string) => {
+      const match = findUniversityByEmail(email, universities);
+      if (match) {
+        setSelectedUni(match.name);
+        setOtherUniName("");
+      }
+    },
+    [universities],
+  );
+
   const validateForm = useCallback((): string | null => {
+    const institution = chosenUniversityName();
+    if (!institution) return "Please choose your university.";
     const normalized = uniEmail.trim().toLowerCase();
     if (!normalized.includes("@")) return "Please enter a valid email address.";
     if (!isAllowedStudentEmail(normalized, allowedDomains)) {
       return "Please use your official university or institutional student email.";
     }
-    if (!institution.trim() || !course.trim() || !studentId.trim()) {
-      return "Institution, course, and student ID are required.";
-    }
-    if (!front || !back) {
-      return "Upload the front and back of your student ID.";
+    const selected: UniversityOption | undefined =
+      selectedUni === OTHER_UNIVERSITY
+        ? { name: institution, domains: [] }
+        : universities.find((uni) => uni.name === selectedUni);
+    if (selected && !emailMatchesUniversity(normalized, selected)) {
+      const hint = selected.domains[0]
+        ? ` Use your @${selected.domains[0]} address.`
+        : "";
+      return `That email does not match ${selected.name}.${hint}`;
     }
     return null;
-  }, [allowedDomains, back, course, front, institution, studentId, uniEmail]);
+  }, [
+    allowedDomains,
+    chosenUniversityName,
+    selectedUni,
+    uniEmail,
+    universities,
+  ]);
 
   const requestOtp = useCallback(async () => {
     setError(null);
@@ -296,8 +361,9 @@ function EmailOtpForm({
 
   const confirmOtp = useCallback(async () => {
     setError(null);
-    if (!userId || !front || !back) {
-      setError("Upload the front and back of your student ID.");
+    const institution = chosenUniversityName();
+    if (!institution) {
+      setError("Please choose your university.");
       return;
     }
     if (otpCode.length !== 6) {
@@ -307,33 +373,16 @@ function EmailOtpForm({
 
     setBusy(true);
     try {
-      const [frontPath, backPath] = await Promise.all([
-        uploadVerificationImage({
-          userId,
-          uri: front.uri,
-          mimeType: front.mimeType,
-          fileName: front.fileName,
-          side: "front",
-        }),
-        uploadVerificationImage({
-          userId,
-          uri: back.uri,
-          mimeType: back.mimeType,
-          fileName: back.fileName,
-          side: "back",
-        }),
-      ]);
-
       const { data, error: rpcError } = await supabase.rpc(
         "confirm_university_verification",
         {
           entered_email: uniEmail.trim().toLowerCase(),
           entered_code: otpCode,
-          inst_name: institution.trim(),
-          course: course.trim(),
-          student_id: studentId.trim(),
-          image_url: frontPath,
-          image_back_url: backPath,
+          inst_name: institution,
+          course: null,
+          student_id: null,
+          image_url: null,
+          image_back_url: null,
         },
       );
       if (rpcError) throw rpcError;
@@ -348,54 +397,36 @@ function EmailOtpForm({
     } finally {
       setBusy(false);
     }
-  }, [
-    back,
-    course,
-    front,
-    institution,
-    onSubmitted,
-    otpCode,
-    studentId,
-    uniEmail,
-    userId,
-  ]);
+  }, [chosenUniversityName, onSubmitted, otpCode, uniEmail]);
 
   return (
     <View style={styles.form}>
-      <Text style={styles.hint}>
-        We confirm the inbox first, then an admin checks both sides of your
-        student ID. You are not verified until an admin approves. Status lasts
-        12 months.
-      </Text>
+      <Text style={styles.hint}>{intro}</Text>
+      <Select
+        label="University"
+        value={selectedUni}
+        options={uniOptions}
+        onChange={setSelectedUni}
+      />
+      {selectedUni === OTHER_UNIVERSITY ? (
+        <FormField
+          label="University or institute name"
+          placeholder="University or institute name"
+          value={otherUniName}
+          onChangeText={setOtherUniName}
+        />
+      ) : null}
       <FormField
         label="University email"
         placeholder="you@university.ac.lk"
         autoCapitalize="none"
         keyboardType="email-address"
         value={uniEmail}
-        onChangeText={setUniEmail}
+        onChangeText={(next) => {
+          setUniEmail(next);
+          applyEmailUniversityMatch(next);
+        }}
       />
-      <FormField
-        label="Institution"
-        placeholder="University or campus name"
-        value={institution}
-        onChangeText={setInstitution}
-      />
-      <FormField
-        label="Course / faculty"
-        placeholder="e.g. BSc Computer Science"
-        value={course}
-        onChangeText={setCourse}
-      />
-      <FormField
-        label="Student ID number"
-        placeholder="As printed on your ID"
-        autoCapitalize="characters"
-        value={studentId}
-        onChangeText={setStudentId}
-      />
-      <IdPhotoPicker label="Student ID — front" value={front} onChange={setFront} />
-      <IdPhotoPicker label="Student ID — back" value={back} onChange={setBack} />
 
       {step === 1 ? (
         <>

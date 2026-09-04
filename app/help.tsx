@@ -11,7 +11,7 @@ const FAQS: readonly { question: string; answer: string }[] = [
   {
     question: "How do I verify my student status?",
     answer:
-      "Open Profile and complete verification with a university email OTP, or upload your student ID for manual review. Verification is valid for 12 months.",
+      "Open Profile and verify with a university email OTP to get access immediately, or upload your student ID for manual review if you do not have an institute email. Verification is valid for 12 months.",
   },
   {
     question: "Do I need to verify every year?",
@@ -73,9 +73,10 @@ export default function HelpScreen() {
         </View>
         <Text style={styles.cardTitle}>Verification help</Text>
         <Text style={styles.cardBody}>
-          Having trouble verifying your student status? Make sure your
-          university email is valid, or use manual verification from Profile.
-          Status expires after 12 months, so re-verify each year to keep access.
+          A correct code sent to your university email verifies you immediately.
+          If you do not have an institute email, upload both sides of your
+          student ID from Profile. Status expires after 12 months, so re-verify
+          each year to keep access.
         </Text>
       </View>
 

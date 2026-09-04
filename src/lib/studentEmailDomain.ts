@@ -1,3 +1,9 @@
+import {
+  SRI_LANKA_UNIVERSITIES,
+  emailHost,
+  hostMatchesDomain,
+} from "@/lib/universities";
+
 export const UNIVERSAL_STUDENT_EMAIL_SUFFIXES = [
   ".ac.lk",
   ".edu.lk",
@@ -7,24 +13,40 @@ export const UNIVERSAL_STUDENT_EMAIL_SUFFIXES = [
   ".ac.uk",
 ] as const;
 
+/** Host after the last @, lowercased. */
+export function emailDomain(email: string): string {
+  return emailHost(email);
+}
+
+/**
+ * Match an email host against a suffix or apex domain.
+ * `.sliit.lk` matches both `name@sliit.lk` and `name@mail.sliit.lk`.
+ */
+export function hostMatchesSuffix(host: string, suffix: string): boolean {
+  let normalized = String(suffix ?? "").trim().toLowerCase();
+  if (normalized.startsWith(".")) normalized = normalized.slice(1);
+  return hostMatchesDomain(host, normalized);
+}
+
+function catalogDomains(): string[] {
+  return SRI_LANKA_UNIVERSITIES.flatMap((uni) => uni.domains);
+}
+
 export function isAllowedStudentEmail(
   email: string,
   allowedDomains: readonly string[],
 ): boolean {
-  const normalized = email.trim().toLowerCase();
-  if (!normalized.includes("@")) return false;
+  const host = emailDomain(email);
+  if (!host) return false;
 
   if (
     UNIVERSAL_STUDENT_EMAIL_SUFFIXES.some((suffix) =>
-      normalized.endsWith(suffix),
+      hostMatchesSuffix(host, suffix),
     )
   ) {
     return true;
   }
 
-  const domainPart = normalized.split("@")[1] ?? "";
-  return allowedDomains.some((allowed) => {
-    const host = allowed.trim().toLowerCase();
-    return domainPart === host || domainPart.endsWith(`.${host}`);
-  });
+  const extras = [...allowedDomains, ...catalogDomains()];
+  return extras.some((allowed) => hostMatchesSuffix(host, allowed));
 }

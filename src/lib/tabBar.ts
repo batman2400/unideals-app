@@ -5,13 +5,13 @@ export const TAB_BAR_HEIGHT = 48;
 
 export const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2;
 
-/** Gap from the left/right screen edges. */
-export const TAB_BAR_HORIZONTAL_INSET = 16;
+/** Gap from the left/right screen edges (px-5 container padding). */
+export const TAB_BAR_HORIZONTAL_INSET = 20;
 
 /** Extra lift above the home indicator. */
 export const TAB_BAR_FLOAT_GAP = 10;
 
-export const SEARCH_CHIP_EXPANDED_WIDTH = 128;
+export const SEARCH_CHIP_EXPANDED_WIDTH = 112;
 export const SEARCH_CHIP_COLLAPSED_WIDTH = 48;
 export const SEARCH_CHIP_HEIGHT = 48;
 export const SEARCH_FIELD_HEIGHT = 48;

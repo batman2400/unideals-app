@@ -1,5 +1,4 @@
 import { Search } from "lucide-react-native";
-import { useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
@@ -15,27 +14,14 @@ type SearchEntryRowProps = {
 };
 
 export function SearchEntryRow({ placeholder, onPress }: SearchEntryRowProps) {
-  const rowRef = useRef<View>(null);
-
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={placeholder}
-      onPress={() => {
-        const node = rowRef.current;
-        if (!node) {
-          onPress({ x: 0, y: 0, width: 0, height: 0 });
-          return;
-        }
-        requestAnimationFrame(() => {
-          node.measureInWindow((x, y, width, height) => {
-            onPress({ x, y, width, height });
-          });
-        });
-      }}
+      onPress={() => onPress({ x: 0, y: 0, width: 0, height: 0 })}
       style={({ pressed }) => [pressed && styles.pressed]}
     >
-      <View ref={rowRef} collapsable={false} style={styles.row}>
+      <View style={styles.row}>
         <Search color={colors.onSurfaceVariant} size={18} />
         <Text style={styles.placeholder}>{placeholder}</Text>
       </View>

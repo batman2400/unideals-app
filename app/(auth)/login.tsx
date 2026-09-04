@@ -316,7 +316,8 @@ export default function LoginScreen() {
           ) : (
             <Text style={styles.disclaimer}>
               After you sign up, verify from Profile with a university email OTP
-              or student ID upload. Verification is valid for 12 months.
+              for instant access, or upload a student ID for review. Verification
+              is valid for 12 months.
             </Text>
           )}
         </View>

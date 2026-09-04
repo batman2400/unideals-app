@@ -81,9 +81,9 @@ Do **not** create a second Firebase project to match the Play Gmail.
 
 ## Phase 0 — Security gate
 
-- [ ] Every **Blocker** in [SECURITY.md](SECURITY.md) is done and signed off
-- [ ] Preview APK works on real Android phones (not only Expo Go)
-- [ ] You accept package name `co.unideals.app` forever
+- [x] Every **Blocker** in [SECURITY.md](SECURITY.md) is done and signed off
+- [x] Preview APK works on real Android phones (not only Expo Go)
+- [x] You accept package name `co.unideals.app` forever
 
 Pay the Play fee **now** if you want the store in the next few weeks **and**
 Phase 0 is complete (or will be before review). Skip the fee if you are still
@@ -93,15 +93,8 @@ only circulating EAS preview links.
 
 ## Phase 1 — Google Play developer account
 
-1. Open [Google Play Console](https://play.google.com/console) with the publisher Gmail.
-2. Register as a developer (~US$25 **one-time**, not yearly).
-3. Complete identity verification. Wait until the account is approved.
-4. **Create app**
-   - Name: Uni Deals
-   - Default language: English (add Sinhala later if needed)
-   - Type: App
-   - Free
-5. Confirm later uploads use application id `co.unideals.app`.
+- [x] Developer account paid and identity verification complete (3 Sep 2026)
+- [x] App created: Uni Deals, English, App, Free, package `co.unideals.app`
 
 ---
 
@@ -111,6 +104,8 @@ Play will not send the app to review until these are complete. Track them
 under **Grow → Store presence** and **Policy → App content**.
 
 ### 2.1 Public legal pages
+
+- [x] Pages are live (do not recreate):
 
 Host the same copy as `src/lib/legalContent.ts` (after the SECURITY.md privacy
 updates) at:
@@ -134,6 +129,14 @@ Must open in a browser **without** installing the app. Contact:
 | Full description | Verified student discounts in Sri Lanka; partner offers; in-store QR; student verification |
 | Contact email | unideals.lk@gmail.com |
 | Privacy policy URL | Public https page from 2.1 |
+
+Ready-to-paste copy and generated assets live in [`play-store/`](play-store/listing-copy.txt):
+
+- `play-store/icon-512.png` — 512×512, no transparency
+- `play-store/feature-graphic.png` — 1024×500
+- `play-store/listing-copy.txt` — short/full description, URLs, Data safety, permission text
+
+You still must **capture phone screenshots** from the preview APK (~1080×1920: Home, Deals, a deal, Student Pass). At least 2.
 
 Suggested short description:
 

@@ -34,26 +34,50 @@ export function useEvents(): UseEventsResult {
     }
     setError(null);
 
-    const { data, error: fetchError } = await supabase
-      .from("events")
-      .select("*")
-      .eq("status", "approved")
-      .order("start_time", { ascending: true });
+    try {
+      const queryPromise = supabase
+        .from("events")
+        .select("*")
+        .eq("status", "approved")
+        .order("start_time", { ascending: true });
 
-    if (!activeRef.current) return;
-
-    if (fetchError) {
-      setError(toErrorMessage(fetchError, "Could not load events."));
-    } else {
-      setEvents(
-        ((data ?? []) as EventRow[])
-          .map(mapEvent)
-          .filter((event) => !isFinishedEvent(event)),
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              data: null,
+              error: { message: "Request timed out. Please check your connection." },
+            }),
+          8000,
+        ),
       );
-    }
 
-    setIsLoading(false);
-    setIsRefreshing(false);
+      const result = await Promise.race([queryPromise, timeoutPromise]);
+      const { data, error: fetchError } = result as {
+        data: EventRow[] | null;
+        error: unknown;
+      };
+
+      if (!activeRef.current) return;
+
+      if (fetchError) {
+        setError(toErrorMessage(fetchError, "Could not load events."));
+      } else {
+        setEvents(
+          ((data ?? []) as EventRow[])
+            .map(mapEvent)
+            .filter((event) => !isFinishedEvent(event)),
+        );
+      }
+    } catch (err) {
+      if (!activeRef.current) return;
+      setError(toErrorMessage(err, "Could not load events."));
+    } finally {
+      if (activeRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
   }, []);
 
   useEffect(() => {

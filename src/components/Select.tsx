@@ -7,8 +7,10 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown } from "lucide-react-native";
 
+import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 
 export interface SelectOption<T extends string> {
@@ -29,11 +31,13 @@ export function Select<T extends string>({
   options,
   onChange,
 }: SelectProps<T>) {
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const selectedLabel = useMemo(
     () => options.find((option) => option.value === value)?.label ?? value,
     [options, value],
   );
+  const sheetBottom = floatingTabBarScrollPadding(insets.bottom);
 
   return (
     <View style={styles.wrap}>
@@ -51,14 +55,20 @@ export function Select<T extends string>({
         visible={open}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setOpen(false)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <View style={styles.sheet}>
+        <Pressable
+          style={[styles.backdrop, { paddingBottom: sheetBottom }]}
+          onPress={() => setOpen(false)}
+        >
+          <Pressable style={styles.sheet} onPress={() => undefined}>
             <Text style={styles.sheetTitle}>{label}</Text>
             <FlatList
               data={[...options]}
               keyExtractor={(item) => item.value}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.listContent}
               renderItem={({ item }) => {
                 const isActive = item.value === value;
                 return (
@@ -81,7 +91,7 @@ export function Select<T extends string>({
                 );
               }}
             />
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -125,12 +135,15 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    maxHeight: "55%",
+    maxHeight: "70%",
     backgroundColor: colors.surfaceContainerLowest,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     padding: spacing.lg,
     gap: spacing.sm,
+  },
+  listContent: {
+    paddingBottom: spacing.md,
   },
   sheetTitle: {
     fontSize: 16,

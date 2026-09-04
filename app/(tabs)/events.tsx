@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Plus } from "lucide-react-native";
+import { CalendarDays, Plus } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pressable,
@@ -180,26 +180,50 @@ export default function EventsScreen() {
           }
           ListEmptyComponent={
             <View style={styles.stateBlock}>
+              <View style={styles.emptyIconWrap}>
+                <CalendarDays color={colors.primary} size={28} />
+              </View>
               <Text style={styles.stateTitle}>
                 {error
                   ? "Could not load events"
-                  : scheduleTab === "coming_soon"
-                    ? "No coming soon events"
-                    : visibleTotal === 0
-                      ? "No events yet"
+                  : visibleTotal === 0
+                    ? "No events scheduled right now"
+                    : scheduleTab === "coming_soon"
+                      ? "No coming soon events"
                       : "No events match that"}
               </Text>
               <Text style={styles.stateBody}>
                 {error
                   ? error
-                  : scheduleTab === "coming_soon"
-                    ? "Scheduled listings will appear here until their go-live date."
-                    : visibleTotal === 0
-                      ? "We are partnering with university societies to bring campus events here. Check back soon, or submit one yourself."
-                      : "Try a different category or switch back to All."}
+                  : visibleTotal === 0
+                    ? "No events scheduled right now — check back soon for upcoming campus events and university society meetups, or submit one yourself."
+                    : scheduleTab === "coming_soon"
+                      ? "Scheduled listings will appear here until their go-live date."
+                      : "Try switching back to All or selecting a different category."}
               </Text>
               {error ? (
                 <Button label="Retry" onPress={() => void refresh()} />
+              ) : visibleTotal === 0 ? (
+                <View style={styles.emptyActionRow}>
+                  <Button
+                    label="Submit an Event"
+                    onPress={() => router.push("/create-event" as Href)}
+                  />
+                  <Button
+                    label="Explore Deals"
+                    variant="secondary"
+                    onPress={() => router.push("/deals" as Href)}
+                  />
+                </View>
+              ) : activeCategory !== "All" || scheduleTab !== "all" ? (
+                <Button
+                  label="Show All Events"
+                  variant="secondary"
+                  onPress={() => {
+                    setActiveCategory("All");
+                    setScheduleTab("all");
+                  }}
+                />
               ) : null}
             </View>
           }
@@ -307,5 +331,21 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
+  },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primaryContainer,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xs,
+  },
+  emptyActionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    flexWrap: "wrap",
+    justifyContent: "center",
   },
 });

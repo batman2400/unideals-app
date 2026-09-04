@@ -1,0 +1,77 @@
+Uni Deals — paste into Play Console
+
+App name
+Uni Deals
+
+Short description (80 chars max)
+Verified student discounts at Sri Lankan partners. Codes online, QR in store.
+
+Full description
+Uni Deals is the student discount app for Sri Lanka.
+
+Verified students unlock partner offers: online promo codes and in-store QR tickets. Create an account, verify with your university email or student ID, then browse deals and campus events.
+
+Partners publish offers and scan student tickets at the register. There are no in-app purchases.
+
+Uni Deals is for ages 13 and older. It is not designed for children under 13.
+
+Support: unideals.lk@gmail.com
+Privacy: https://unideals.co/privacy
+Terms: https://unideals.co/terms
+Delete account: https://www.unideals.co/delete-account
+
+Store listing URLs
+Privacy policy: https://unideals.co/privacy
+Terms: https://unideals.co/terms
+Account deletion: https://www.unideals.co/delete-account
+Contact email: unideals.lk@gmail.com
+Website: https://unideals.co
+
+Category
+Lifestyle (or Shopping)
+
+Countries
+Sri Lanka
+
+Target audience
+13 and older. Not designed for children.
+
+Ads
+No
+
+News / finance / health / government
+No
+
+App access (reviewer logins)
+Provide a verified student test account and a partner test account so reviewers can open deals, Reveal, and the scanner.
+
+Data safety
+Not sold. Used for app functionality, account, and fraud prevention.
+Processors: Supabase, Firebase/Google, Expo.
+
+Collected:
+- Email, name — Account (Supabase Auth)
+- University / student status — App functionality (verification)
+- Photos (student ID) — App functionality (image picker; not sold)
+- Device IDs / push token — Notifications (Expo + FCM)
+- User-generated content — Partner deals and inquiries — App functionality
+
+Permission justifications (must match the in-app prompt)
+Camera: Uni Deals uses the camera so partner staff can scan student redemption QR codes at the register.
+Photos: Uni Deals needs photo access so students can upload ID proof for verification.
+Notifications: Deal and event alerts.
+
+Assets in this folder
+icon-512.png — 512x512, RGB, no transparency
+feature-graphic.png — 1024x500, RGB
+
+Screenshots
+Capture on a phone from the preview APK, about 1080x1920:
+1. Home
+2. Deals
+3. A deal (Reveal or QR)
+4. Student Pass / verify
+Need at least 2. Do not use the web app.
+
+Device catalog after AAB upload
+Phones only. Exclude Android TV, Wear, Auto. Exclude tablets for v1.

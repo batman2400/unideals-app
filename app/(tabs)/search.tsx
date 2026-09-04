@@ -1,6 +1,6 @@
-import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { ChevronLeft, Search } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -12,7 +12,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { interpolate, useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BrandResultRow } from "@/components/BrandResultRow";
@@ -33,8 +32,6 @@ import {
 } from "@/lib/eventTiming";
 import {
   SEARCH_FIELD_HEIGHT,
-  SEARCH_FOCUS_AT,
-  SEARCH_MORPH_MS,
   floatingTabBarScrollPadding,
 } from "@/lib/tabBar";
 import {
@@ -70,7 +67,7 @@ export default function SearchScreen() {
     scope?: string | string[];
     q?: string | string[];
   }>();
-  const { searchFieldVisible, leaveSearch, morphProgress } = useTabBarMotion();
+  const { leaveSearch } = useTabBarMotion();
   const inputRef = useRef<TextInput>(null);
 
   const { deals, isLoading: dealsLoading, isRefreshing: dealsRefreshing, error: dealsError, refresh: refreshDeals } =
@@ -93,31 +90,12 @@ export default function SearchScreen() {
     if (raw !== undefined) setQuery(raw);
   }, [params.q]);
 
-  const focusSearchField = useCallback(() => {
-    inputRef.current?.focus();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
+    return () => clearTimeout(timer);
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      const timer = setTimeout(
-        focusSearchField,
-        Math.round(SEARCH_MORPH_MS * SEARCH_FOCUS_AT),
-      );
-      return () => clearTimeout(timer);
-    }, [focusSearchField]),
-  );
-
-  const screenStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(morphProgress.value, [0.18, 1], [0, 1]),
-  }));
-
-  const fieldRevealStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(morphProgress.value, [0.62, 1], [0.02, 1]),
-  }));
-
-  const backRevealStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(morphProgress.value, [0.55, 1], [0, 1]),
-  }));
 
   const { live: liveDeals, comingSoon: comingSoonDeals } = useMemo(
     () => partitionDeals(deals),
@@ -212,24 +190,21 @@ export default function SearchScreen() {
       style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Animated.View style={[styles.screen, screenStyle]}>
+      <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Animated.View style={backRevealStyle}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            onPress={() => leaveSearch()}
-            disabled={!searchFieldVisible}
-            style={({ pressed }) => [
-              styles.backBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            <ChevronLeft color={colors.primary} size={26} />
-          </Pressable>
-        </Animated.View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => leaveSearch()}
+          style={({ pressed }) => [
+            styles.backBtn,
+            pressed && styles.pressed,
+          ]}
+        >
+          <ChevronLeft color={colors.primary} size={26} />
+        </Pressable>
 
-        <Animated.View style={[styles.field, fieldRevealStyle]}>
+        <View style={styles.field}>
           <Search color={colors.onSurfaceVariant} size={18} />
           <TextInput
             ref={inputRef}
@@ -245,7 +220,6 @@ export default function SearchScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus={false}
-            caretHidden={!searchFieldVisible}
             editable
             returnKeyType="search"
             showSoftInputOnFocus
@@ -260,10 +234,10 @@ export default function SearchScreen() {
               }
             }}
           />
-        </Animated.View>
+        </View>
       </View>
 
-      <Animated.View style={styles.body}>
+      <View style={styles.body}>
         <View style={styles.scopeWrap}>
           <SegmentedControl
             value={scope}
@@ -363,8 +337,8 @@ export default function SearchScreen() {
           }
         />
       )}
-      </Animated.View>
-      </Animated.View>
+      </View>
+      </View>
     </KeyboardAvoidingView>
   );
 }

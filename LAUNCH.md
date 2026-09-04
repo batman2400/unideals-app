@@ -49,14 +49,14 @@ Details: [SECURITY.md](SECURITY.md) (gate) then [PLAY_STORE.md](PLAY_STORE.md)
 
 ### 3. Phone QA (preview APK, not Play)
 
-- [ ] Happy path: login / Google / reset, ID verify, **Online Reveal** (need
+- [x] Happy path: login / Google / reset, ID verify, **Online Reveal** (need
       a live Online deal), in-store QR + scanner, admin approve/reject, push
-- [ ] Abuse: student JWT cannot steal IDs, other partners’ codes, or admin
+- [x] Abuse: student JWT cannot steal IDs, other partners’ codes, or admin
       RPCs
 
 ### 4. Play Console (after 1–3)
 
-- [ ] Pay $25, identity verification, create app `co.unideals.app`
+- [x] Pay $25, identity verification, create app `co.unideals.app`
 - [ ] Store listing: 512 icon, **1024×500 feature graphic**, screenshots,
       short/full description, Data safety, IARC, 13+ audience, camera/photo
       justifications, reviewer student + partner logins

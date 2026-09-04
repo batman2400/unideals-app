@@ -108,14 +108,14 @@ These are done. Phone QA is still open below.
 
 ## Blockers — QA (preview APK, real phone)
 
-Happy path:
+Happy path (signed off 3 Sep 2026 on preview APK):
 
-- [ ] Login / Google / password reset
-- [ ] Student ID upload + university verification
-- [ ] Online code reveal (verified student only)
-- [ ] In-store ticket QR + partner scanner
-- [ ] Admin verification approve/reject
-- [ ] Push notification for a newly approved deal or event
+- [x] Login / Google / password reset
+- [x] Student ID upload + university verification
+- [x] Online code reveal (verified student only)
+- [x] In-store ticket QR + partner scanner
+- [x] Admin verification approve/reject
+- [x] Push notification for a newly approved deal or event
 
 Abuse (student JWT against the REST API, not only the UI):
 
@@ -154,7 +154,7 @@ Repeat for Storage download of `{otherUserId}/front-….jpg` and for
 
 | Role | Name | Date | Notes |
 |---|---|---|---|
-| App / Expo | | | Repo blockers done. Preview QA is step 12 |
+| App / Expo | | 3 Sep 2026 | Repo blockers + preview APK QA done. Next is Play listing |
 | Supabase | | 3 Sep 2026 | RLS, Storage, Edge Functions, Auth URLs, password rules |
 | Firebase | | | Android key restrictions already set. Play SHA-1 is step 14 |
 

@@ -80,8 +80,7 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
   const chipW = useSharedValue(128);
   const chipH = useSharedValue(48);
 
-  const [searchFieldVisible, setSearchFieldVisible] = useState(false);
-  const motionGenRef = useRef(0);
+  const [searchFieldVisible, setSearchFieldVisible] = useState(true);
   const searchOpenRef = useRef(false);
 
   const writeChipFrame = useCallback(
@@ -112,47 +111,22 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
     (layout: MeasuredLayout) => {
       if (!isUsableLayout(layout)) return;
       chipLayoutRef.current = layout;
-      if (morphProgress.value < 0.01) {
-        writeChipFrame(layout);
-      }
+      writeChipFrame(layout);
     },
-    [morphProgress, writeChipFrame],
+    [writeChipFrame],
   );
 
-  const finishOpen = useCallback((gen: number) => {
-    if (motionGenRef.current !== gen) return;
-    setSearchFieldVisible(true);
-  }, []);
-
   const closeSearchMorph = useCallback(() => {
-    if (!searchOpenRef.current) return;
     searchOpenRef.current = false;
-    motionGenRef.current += 1;
+    morphProgress.value = 0;
     Keyboard.dismiss();
-    writeChipFrame(resolveChipFrame(chipLayoutRef.current));
-    setSearchFieldVisible(false);
-    morphProgress.value = withTiming(0, {
-      duration: SEARCH_MORPH_MS,
-      easing: morphEasing,
-    });
-  }, [morphProgress, resolveChipFrame, writeChipFrame]);
+  }, [morphProgress]);
 
   const openSearch = useCallback(
-    (layout?: MeasuredLayout | null, options?: OpenSearchOptions) => {
-      if (searchOpenRef.current && morphProgress.value > 0.98) return;
-
-      const gen = ++motionGenRef.current;
+    (_layout?: MeasuredLayout | null, options?: OpenSearchOptions) => {
       searchOpenRef.current = true;
-      writeChipFrame(resolveChipFrame(layout));
-      setSearchFieldVisible(false);
-      morphProgress.value = withTiming(
-        1,
-        { duration: SEARCH_MORPH_MS, easing: morphEasing },
-        (finished) => {
-          if (!finished) return;
-          runOnJS(finishOpen)(gen);
-        },
-      );
+      morphProgress.value = 1;
+      setSearchFieldVisible(true);
 
       const scope = options?.scope && options.scope !== "all" ? options.scope : "all";
       router.navigate({
@@ -163,13 +137,7 @@ export function TabBarMotionProvider({ children }: { children: ReactNode }) {
         },
       } as Href);
     },
-    [
-      finishOpen,
-      morphProgress,
-      resolveChipFrame,
-      router,
-      writeChipFrame,
-    ],
+    [morphProgress, router],
   );
 
   const leaveSearch = useCallback(

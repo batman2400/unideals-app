@@ -19,7 +19,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SearchChip } from "@/components/SearchChip";
 import { useTabBarMotion } from "@/context/TabBarMotionContext";
 import {
-  SEARCH_CHIP_COLLAPSED_WIDTH,
   SEARCH_CHIP_EXPANDED_WIDTH,
   TAB_BAR_HEIGHT,
   TAB_BAR_HORIZONTAL_INSET,
@@ -98,6 +97,15 @@ export function FloatingTabBar({
     ],
   }));
 
+  const leftInset = Math.max(
+    TAB_BAR_HORIZONTAL_INSET,
+    insets.left + TAB_BAR_HORIZONTAL_INSET,
+  );
+  const rightInset = Math.max(
+    TAB_BAR_HORIZONTAL_INSET,
+    insets.right + TAB_BAR_HORIZONTAL_INSET,
+  );
+
   const renderTab = (item: { route: TabRoute; index: number }) => (
     <TabItem
       key={item.route.key}
@@ -107,6 +115,8 @@ export function FloatingTabBar({
       navigation={navigation}
       onSearch={onSearch}
       onLeaveSearch={leaveSearch}
+      leftInset={leftInset}
+      rightInset={rightInset}
     />
   );
 
@@ -115,7 +125,11 @@ export function FloatingTabBar({
       pointerEvents={onSearch && keyboardOpen ? "none" : "box-none"}
       style={[
         styles.wrap,
-        { bottom: floatingTabBarBottomOffset(insets.bottom) },
+        {
+          bottom: floatingTabBarBottomOffset(insets.bottom),
+          left: leftInset,
+          right: rightInset,
+        },
         wrapStyle,
       ]}
     >
@@ -135,6 +149,8 @@ function TabItem({
   navigation,
   onSearch,
   onLeaveSearch,
+  leftInset,
+  rightInset,
 }: {
   route: TabRoute;
   focused: boolean;
@@ -142,9 +158,10 @@ function TabItem({
   navigation: FloatingTabBarProps["navigation"];
   onSearch: boolean;
   onLeaveSearch: (tabName: string) => void;
+  leftInset: number;
+  rightInset: number;
 }) {
   const { width: windowWidth } = useWindowDimensions();
-  const { morphProgress } = useTabBarMotion();
   const scale = useSharedValue(1);
   const options = descriptor?.options;
   const color = focused ? colors.primary : "#6B7280";
@@ -156,15 +173,10 @@ function TabItem({
   });
 
   const pillStyle = useAnimatedStyle(() => {
-    const searchW = interpolate(
-      morphProgress.value,
-      [0, 1],
-      [SEARCH_CHIP_EXPANDED_WIDTH, SEARCH_CHIP_COLLAPSED_WIDTH],
-    );
     const available =
       windowWidth -
-      TAB_BAR_HORIZONTAL_INSET * 2 -
-      searchW -
+      (leftInset + rightInset) -
+      SEARCH_CHIP_EXPANDED_WIDTH -
       TAB_CHIP_GAP * 4;
     return {
       width: Math.max(48, available / 4),
@@ -207,8 +219,6 @@ function TabItem({
 const styles = StyleSheet.create({
   wrap: {
     position: "absolute",
-    left: TAB_BAR_HORIZONTAL_INSET,
-    right: TAB_BAR_HORIZONTAL_INSET,
     height: TAB_BAR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
