@@ -398,6 +398,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    void supabase.auth
+      .getSession()
+      .then(({ data: { session: currentSession } }) => {
+        if (!active) return;
+        void applySession(currentSession, true, false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setIsLoading(false);
+      });
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(

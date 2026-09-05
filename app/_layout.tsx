@@ -90,9 +90,18 @@ function NavigationGuard() {
   }, [beginPasswordRecovery, router]);
 
   useEffect(() => {
-    if (isLoading) return;
-    void SplashScreen.hideAsync();
+    if (!isLoading) {
+      void SplashScreen.hideAsync().catch(() => {});
+    }
   }, [isLoading]);
+
+  // Safety fallback so splash screen never hangs permanently
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Recovery emails may omit `type=` but still emit PASSWORD_RECOVERY.
   useEffect(() => {
@@ -116,14 +125,6 @@ function NavigationGuard() {
 
     return subscribeToPushResponses(openTarget);
   }, [isAuthenticated, isLoading, isPasswordRecovery, router]);
-
-  if (isLoading) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
-  }
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: styles.content }}>
@@ -196,94 +197,94 @@ function NavigationGuard() {
           name="privacy"
           options={{ ...stackHeader, title: "Privacy Policy" }}
         />
+      </Stack.Protected>
 
-        <Stack.Protected guard={role === "partner"}>
-          <Stack.Screen name="partner/dashboard" />
-          <Stack.Screen
-            name="partner/deals"
-            options={{ ...stackHeader, title: "My Deals" }}
-          />
-          <Stack.Screen
-            name="partner/finished-deals"
-            options={{ ...stackHeader, title: "Finished Deals" }}
-          />
-          <Stack.Screen
-            name="partner/scanner"
-            options={{ ...stackHeader, title: "Scanner" }}
-          />
-          <Stack.Screen
-            name="partner/analytics"
-            options={{ ...stackHeader, title: "Analytics" }}
-          />
-          <Stack.Screen
-            name="partner/brand"
-            options={{ ...stackHeader, title: "Brand Profile" }}
-          />
-          <Stack.Screen
-            name="create-deal"
-            options={{
-              presentation: "modal",
-              ...stackHeader,
-              title: "Create Deal",
-            }}
-          />
-          <Stack.Screen
-            name="edit-deal/[id]"
-            options={{
-              presentation: "modal",
-              ...stackHeader,
-              title: "Edit Deal",
-            }}
-          />
-        </Stack.Protected>
+      <Stack.Protected guard={isAuthenticated && !isPasswordRecovery && role === "partner"}>
+        <Stack.Screen name="partner/dashboard" />
+        <Stack.Screen
+          name="partner/deals"
+          options={{ ...stackHeader, title: "My Deals" }}
+        />
+        <Stack.Screen
+          name="partner/finished-deals"
+          options={{ ...stackHeader, title: "Finished Deals" }}
+        />
+        <Stack.Screen
+          name="partner/scanner"
+          options={{ ...stackHeader, title: "Scanner" }}
+        />
+        <Stack.Screen
+          name="partner/analytics"
+          options={{ ...stackHeader, title: "Analytics" }}
+        />
+        <Stack.Screen
+          name="partner/brand"
+          options={{ ...stackHeader, title: "Brand Profile" }}
+        />
+        <Stack.Screen
+          name="create-deal"
+          options={{
+            presentation: "modal",
+            ...stackHeader,
+            title: "Create Deal",
+          }}
+        />
+        <Stack.Screen
+          name="edit-deal/[id]"
+          options={{
+            presentation: "modal",
+            ...stackHeader,
+            title: "Edit Deal",
+          }}
+        />
+      </Stack.Protected>
 
-        <Stack.Protected guard={role === "admin"}>
-          <Stack.Screen name="admin/dashboard" />
-          <Stack.Screen
-            name="admin/verifications"
-            options={{ ...stackHeader, title: "Verifications" }}
-          />
-          <Stack.Screen
-            name="admin/pending-events"
-            options={{ ...stackHeader, title: "Pending Events" }}
-          />
-          <Stack.Screen
-            name="admin/inquiries"
-            options={{ ...stackHeader, title: "Inquiries" }}
-          />
-          <Stack.Screen
-            name="admin/deals"
-            options={{ ...stackHeader, title: "All Deals" }}
-          />
-          <Stack.Screen
-            name="admin/finished-deals"
-            options={{ ...stackHeader, title: "Finished Deals" }}
-          />
-          <Stack.Screen
-            name="admin/events"
-            options={{ ...stackHeader, title: "All Events" }}
-          />
-          <Stack.Screen
-            name="admin/finished-events"
-            options={{ ...stackHeader, title: "Finished Events" }}
-          />
-          <Stack.Screen
-            name="admin/blog"
-            options={{ ...stackHeader, title: "Blog Manager" }}
-          />
-          <Stack.Screen
-            name="admin/users"
-            options={{ ...stackHeader, title: "Users" }}
-          />
-          <Stack.Screen
-            name="admin/brands"
-            options={{ ...stackHeader, title: "Brands" }}
-          />
-          <Stack.Screen
-            name="admin/analytics"
-            options={{ ...stackHeader, title: "Analytics" }}
-          />
-        </Stack.Protected>
+      <Stack.Protected guard={isAuthenticated && !isPasswordRecovery && role === "admin"}>
+        <Stack.Screen name="admin/dashboard" />
+        <Stack.Screen
+          name="admin/verifications"
+          options={{ ...stackHeader, title: "Verifications" }}
+        />
+        <Stack.Screen
+          name="admin/pending-events"
+          options={{ ...stackHeader, title: "Pending Events" }}
+        />
+        <Stack.Screen
+          name="admin/inquiries"
+          options={{ ...stackHeader, title: "Inquiries" }}
+        />
+        <Stack.Screen
+          name="admin/deals"
+          options={{ ...stackHeader, title: "All Deals" }}
+        />
+        <Stack.Screen
+          name="admin/finished-deals"
+          options={{ ...stackHeader, title: "Finished Deals" }}
+        />
+        <Stack.Screen
+          name="admin/events"
+          options={{ ...stackHeader, title: "All Events" }}
+        />
+        <Stack.Screen
+          name="admin/finished-events"
+          options={{ ...stackHeader, title: "Finished Events" }}
+        />
+        <Stack.Screen
+          name="admin/blog"
+          options={{ ...stackHeader, title: "Blog Manager" }}
+        />
+        <Stack.Screen
+          name="admin/users"
+          options={{ ...stackHeader, title: "Users" }}
+        />
+        <Stack.Screen
+          name="admin/brands"
+          options={{ ...stackHeader, title: "Brands" }}
+        />
+        <Stack.Screen
+          name="admin/analytics"
+          options={{ ...stackHeader, title: "Analytics" }}
+        />
       </Stack.Protected>
 
       {/* After auth/tabs so it is never the Stack fallback on reload/logout. */}
