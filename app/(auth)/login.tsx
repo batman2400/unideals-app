@@ -48,6 +48,9 @@ export default function LoginScreen() {
 
   const isSignUp = tab === "signup";
   const isBusy = isSubmitting || isGoogleSubmitting;
+  // Google on iOS would require Sign in with Apple (guideline 4.8). Email
+  // and password is the iPhone path; Android and web keep Google.
+  const showGoogleSignIn = Platform.OS !== "ios";
 
   useEffect(() => {
     if (typeof params.error === "string" && params.error) {
@@ -225,12 +228,16 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.form}>
-          <GoogleSignInButton
-            onPress={() => void handleGoogleSignIn()}
-            loading={isGoogleSubmitting}
-            disabled={isBusy}
-          />
-          <AuthDivider />
+          {showGoogleSignIn ? (
+            <>
+              <GoogleSignInButton
+                onPress={() => void handleGoogleSignIn()}
+                loading={isGoogleSubmitting}
+                disabled={isBusy}
+              />
+              <AuthDivider />
+            </>
+          ) : null}
 
           {isSignUp ? (
             <>

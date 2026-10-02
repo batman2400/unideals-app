@@ -4,7 +4,7 @@ export interface LegalSection {
 }
 
 export const TERMS_UPDATED = "September 1, 2026";
-export const PRIVACY_UPDATED = "September 1, 2026";
+export const PRIVACY_UPDATED = "October 3, 2026";
 export const DELETE_ACCOUNT_URL = "https://www.unideals.co/delete-account";
 
 export const TERMS_SECTIONS: readonly LegalSection[] = [
@@ -81,7 +81,7 @@ export const PRIVACY_SECTIONS: readonly LegalSection[] = [
   },
   {
     heading: "6. Camera and Push Notifications",
-    body: "Partner and admin users who scan in-store tickets may grant camera access on the partner scanner. Camera frames are processed on the device to read QR codes. We do not upload a live video stream of the scan.\n\nThe mobile app may store Expo push tokens on your account so we can send optional deal or event alerts. You can disable notifications in the device settings. Tokens are removed when you delete your account.",
+    body: "Partner and admin users who scan in-store tickets may grant camera access on the partner scanner. Camera frames are processed on the device to read QR codes. We do not upload a live video stream of the scan. The app does not use the microphone.\n\nThe mobile app may store Expo push tokens on your account so we can send optional deal or event alerts. On Android those alerts are sent with Firebase Cloud Messaging. On iPhone they are sent with Apple Push Notification service. You can disable notifications in the device settings. Tokens are removed when you delete your account.",
   },
   {
     heading: "7. Verification, Security, and Access Control",
@@ -89,7 +89,7 @@ export const PRIVACY_SECTIONS: readonly LegalSection[] = [
   },
   {
     heading: "8. Third-Party Partners and Service Providers",
-    body: "Deals shown on Uni Deals are provided by third-party partners. We may share only the minimum necessary information with trusted service providers and infrastructure vendors for hosting, authentication, analytics, and communications. Partner businesses are independently responsible for how they handle transactions and redemptions under their own policies.",
+    body: "Deals shown on Uni Deals are provided by third-party partners. We may share only the minimum necessary information with trusted service providers and infrastructure vendors for hosting, authentication, analytics, and communications. Those providers include Supabase, Expo, Google (including Firebase for Android notifications and website analytics), and Apple (iPhone push notifications). Partner businesses are independently responsible for how they handle transactions and redemptions under their own policies.",
   },
   {
     heading: "9. Data Retention",

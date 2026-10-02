@@ -30,6 +30,9 @@
       "android": {
         "track": "internal",
         "releaseStatus": "draft"
+      },
+      "ios": {
+        "appleTeamId": "WW88LS36YD"
       }
     }
   }

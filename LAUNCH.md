@@ -5,7 +5,7 @@
 Do **not** submit to Play yet. Do **not** run cutover SQL yet.
 
 The student, partner, and admin product is already built. Do **not** start a
-new feature track. Ignore blog, iOS, dark mode, and Sinhala.
+new feature track. Ignore blog, dark mode, and Sinhala. iOS is tracked in [APP_STORE.md](APP_STORE.md).
 
 Work in this order: **app + backend → phone QA → Play Console**.
 
@@ -97,8 +97,8 @@ Push pipeline is coded (`notify-students` + SQL files). No in-app payments
 (by design).
 
 **Intentionally not in the app** (website-only, fine for Play v1): student
-blog reader, public brand directory, admin brand impersonation, Apple App
-Store, dark mode, Sinhala.
+blog reader, public brand directory, admin brand impersonation, dark mode,
+Sinhala. Apple App Store is a separate track in [APP_STORE.md](APP_STORE.md).
 
 ---
 
@@ -108,7 +108,7 @@ Store, dark mode, Sinhala.
       install Reveals a code. Website repo, Supabase SQL editor. See
       [md/REVEAL_PROMO_CODE.md](md/REVEAL_PROMO_CODE.md).
 - Nice-to-haves: Sentry, tests, App Links, App Check, Student Pass QR
-  change, date picker, iOS
+  change, date picker. iOS is tracked in [APP_STORE.md](APP_STORE.md)
 
 ---
 

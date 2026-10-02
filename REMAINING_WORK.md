@@ -101,7 +101,7 @@ Website playbook A–D and parity 0–4 are already shipped. After 1–6, **stop
 
 ## Skip / later (not this queue)
 
-- Blog reader, iOS, dark mode, Sinhala
+- Blog reader, dark mode, Sinhala. iOS is tracked in [APP_STORE.md](APP_STORE.md)
 - Campus hubs, extra Brands navbar, Hotjar, Redis/KV
 - Partner badges, CORS tighten, CSP until after Play
 - Cutover SQL **before** the store Reveal works

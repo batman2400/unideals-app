@@ -33,6 +33,11 @@ const FAQS: readonly { question: string; answer: string }[] = [
     answer:
       "We offer both free student discounts and featured placements. Reach out through Contact to learn more.",
   },
+  {
+    question: "I signed up with Google. How do I sign in on iPhone?",
+    answer:
+      "The iPhone app uses email and password. On Sign in, enter the same email, tap Forgot password?, and open the link in the email. That sets a password for this account so you can sign in on iPhone.",
+  },
 ];
 
 export default function HelpScreen() {

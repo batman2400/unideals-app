@@ -1,0 +1,73 @@
+Uni Deals — paste into App Store Connect
+
+Name (30)
+Uni Deals
+
+Subtitle (30)
+Student discounts in Sri Lanka
+
+Promotional text (170, editable without review)
+Verified student discounts at Sri Lankan partners. Online codes and in-store QR tickets.
+
+Description (4000)
+Uni Deals is the student discount app for Sri Lanka.
+
+Verified students unlock partner offers: online promo codes and in-store QR tickets. Create an account, verify with your university email or student ID, then browse deals and campus events.
+
+Partners publish offers and scan student tickets at the register. There are no in-app purchases.
+
+On iPhone, sign in with email and password. If you already created an account with Google on the website or Android, use Forgot password with the same email to set a password.
+
+Uni Deals is for ages 13 and older. It is not designed for children under 13.
+
+Support: unideals.lk@gmail.com
+Privacy: https://unideals.co/privacy
+Terms: https://unideals.co/terms
+Delete account: https://www.unideals.co/delete-account
+
+Keywords (100, comma-separated)
+student,discount,deals,university,campus,offers,sri lanka,promo code,coupons
+
+URLs
+Support URL: https://unideals.co
+Marketing URL: https://unideals.co
+Privacy policy: https://unideals.co/privacy
+
+Copyright
+2026 Uvaram Mohanaram
+
+Category
+Primary: Lifestyle
+Secondary: Shopping
+
+Pricing and availability
+Free. Sri Lanka only for v1.
+
+Age rating
+Answer the questionnaire honestly. Expected result 13+. Do not select Kids Category.
+No violence, gambling, mature content, or unrestricted web browsing.
+
+App Privacy (all linked to the user, not used for tracking, not sold)
+Contact Info — Name, Email address — App Functionality
+User Content — Photos (student ID), Customer support, Other user content (partner deals) — App Functionality
+Identifiers — User ID — App Functionality
+Identifiers — Device ID (Expo/APNs push token) — App Functionality
+Other Data — University / student status, student type — App Functionality
+
+App Review notes
+Uni Deals is for verified students in Sri Lanka. Login is required because every offer is tied to the student's verified status and single-use codes.
+
+Demo student (pre-verified): <email> / <password>
+Partner login: <email> / <password>
+Partner path: Partner login → Scanner. Scan the QR shown in the student account → Tickets.
+Sample live Online deal: <deal name> to test Reveal.
+
+Screenshots
+iPhone 6.9" (1320×2868 or 1290×2796 portrait), 3–10 images, captured from the TestFlight build.
+1. Home
+2. Deals list
+3. Deal with Reveal code
+4. In-store QR ticket
+5. Student Pass / verification
+6. Partner scanner
+Do not reuse Android screenshots. No iPad set (supportsTablet is false).

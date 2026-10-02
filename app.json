@@ -10,8 +10,11 @@
     "backgroundColor": "#fcf9f8",
     "primaryColor": "#29695b",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "co.unideals.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Uni Deals uses the camera so partner staff can scan student redemption QR codes at the register."
       }
@@ -48,13 +51,15 @@
         "expo-camera",
         {
           "cameraPermission": "Uni Deals uses the camera so partner staff can scan student redemption QR codes at the register.",
+          "microphonePermission": false,
           "recordAudioAndroid": false
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Uni Deals needs photo access so students can upload ID proof for verification."
+          "photosPermission": "Uni Deals needs photo access so students can upload ID proof for verification.",
+          "microphonePermission": false
         }
       ],
       "@react-native-community/datetimepicker",
@@ -67,7 +72,12 @@
           "enableBackgroundRemoteNotifications": false
         }
       ],
-      "expo-secure-store"
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
