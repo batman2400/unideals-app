@@ -5,7 +5,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
 import { FormField } from "@/components/FormField";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Select } from "@/components/Select";
+import { UniversityPicker } from "@/components/UniversityPicker";
 import { useAuth } from "@/context/AuthContext";
 import { isAllowedStudentEmail } from "@/lib/studentEmailDomain";
 import { supabase, toErrorMessage } from "@/lib/supabase";
@@ -233,6 +233,7 @@ export function VerificationPanel({
           userId={user?.id}
           accountEmail={user?.email ?? ""}
           defaultType={isSchoolStudent ? "school" : "university"}
+          universities={universities}
           onSubmitted={onRequestChange}
         />
       )}
@@ -263,15 +264,6 @@ function EmailOtpForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-
-  const uniOptions = useMemo(
-    () => [
-      { value: "", label: "Select your university" },
-      { value: OTHER_UNIVERSITY, label: "Other / not listed" },
-      ...universities.map((uni) => ({ value: uni.name, label: uni.name })),
-    ],
-    [universities],
-  );
 
   const chosenUniversityName = useCallback(() => {
     if (selectedUni === OTHER_UNIVERSITY) return otherUniName.trim();
@@ -402,20 +394,15 @@ function EmailOtpForm({
   return (
     <View style={styles.form}>
       <Text style={styles.hint}>{intro}</Text>
-      <Select
-        label="University"
+      <UniversityPicker
+        universities={universities}
         value={selectedUni}
-        options={uniOptions}
-        onChange={setSelectedUni}
+        otherName={otherUniName}
+        onChange={({ value, otherName }) => {
+          setSelectedUni(value);
+          setOtherUniName(otherName);
+        }}
       />
-      {selectedUni === OTHER_UNIVERSITY ? (
-        <FormField
-          label="University or institute name"
-          placeholder="University or institute name"
-          value={otherUniName}
-          onChangeText={setOtherUniName}
-        />
-      ) : null}
       <FormField
         label="University email"
         placeholder="you@university.ac.lk"
@@ -477,15 +464,19 @@ function ManualForm({
   userId,
   accountEmail,
   defaultType,
+  universities,
   onSubmitted,
 }: {
   userId: string | undefined;
   accountEmail: string;
   defaultType: InstitutionType;
+  universities: readonly UniversityOption[];
   onSubmitted: () => void;
 }) {
   const [instType, setInstType] = useState<InstitutionType>(defaultType);
   const [instName, setInstName] = useState("");
+  const [selectedUni, setSelectedUni] = useState("");
+  const [otherUniName, setOtherUniName] = useState("");
   const [course, setCourse] = useState("");
   const [studentId, setStudentId] = useState("");
   const [front, setFront] = useState<ProofAsset | null>(null);
@@ -493,9 +484,16 @@ function ManualForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const institutionName =
+    instType === "university"
+      ? selectedUni === OTHER_UNIVERSITY
+        ? otherUniName.trim()
+        : selectedUni.trim()
+      : instName.trim();
+
   const submit = useCallback(async () => {
     setError(null);
-    if (!userId || !instName.trim() || !front || !back) {
+    if (!userId || !institutionName || !front || !back) {
       setError("Institution name and both sides of your student ID are required.");
       return;
     }
@@ -527,7 +525,7 @@ function ManualForm({
         "submit_manual_verification",
         {
           inst_type: instType,
-          inst_name: instName.trim(),
+          inst_name: institutionName,
           course: instType === "school" ? course.trim() : course.trim(),
           student_id: studentId.trim(),
           email: accountEmail || "unknown@example.com",
@@ -552,7 +550,7 @@ function ManualForm({
     back,
     course,
     front,
-    instName,
+    institutionName,
     instType,
     onSubmitted,
     studentId,
@@ -573,14 +571,24 @@ function ManualForm({
         value={instType}
         onChange={setInstType}
       />
-      <FormField
-        label="Institution name"
-        placeholder={
-          instType === "school" ? "School name" : "University or campus name"
-        }
-        value={instName}
-        onChangeText={setInstName}
-      />
+      {instType === "university" ? (
+        <UniversityPicker
+          universities={universities}
+          value={selectedUni}
+          otherName={otherUniName}
+          onChange={({ value, otherName }) => {
+            setSelectedUni(value);
+            setOtherUniName(otherName);
+          }}
+        />
+      ) : (
+        <FormField
+          label="School name"
+          placeholder="School name"
+          value={instName}
+          onChangeText={setInstName}
+        />
+      )}
       {instType === "university" ? (
         <>
           <FormField

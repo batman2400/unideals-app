@@ -146,3 +146,212 @@ export function emailMatchesUniversity(
   const host = emailHost(email);
   return domains.some((domain) => hostMatchesDomain(host, domain));
 }
+
+const STOP_WORDS = new Set(["of", "the", "and", "for", "at", "a", "an"]);
+const DOMAIN_NOISE = new Set(["lk", "ac", "edu", "com", "www"]);
+
+/** Misspellings and short forms that are not already in the name or domain. */
+const SEARCH_ALIASES: Record<string, readonly string[]> = {
+  "university of sri jayewardenepura": [
+    "japura",
+    "sjp",
+    "usj",
+    "usjp",
+    "jayawardenepura",
+    "jayawardena",
+  ],
+  "university of moratuwa": ["mora", "uom"],
+  "university of colombo": ["uoc"],
+  "university of peradeniya": ["pera", "uop"],
+  "university of kelaniya": ["kelani"],
+  "university of jaffna": ["uoj"],
+  "university of ruhuna": ["ruh"],
+  "the open university of sri lanka": ["ousl"],
+  "general sir john kotelawala defence university": [
+    "kdu",
+    "kotelawala",
+    "defense",
+  ],
+  "eastern university sri lanka": ["eusl"],
+  "south eastern university of sri lanka": ["seusl"],
+  "rajarata university of sri lanka": ["rajarata"],
+  "sabaragamuwa university of sri lanka": ["susl"],
+  "wayamba university of sri lanka": ["wayamba"],
+  "uva wellassa university": ["wellassa"],
+  "university of the visual and performing arts": ["uvpa"],
+  "gampaha wickramarachchi university of indigenous medicine": [
+    "wickramarachchi",
+  ],
+  "buddhist and pali university of sri lanka": ["bpu"],
+  "ca sri lanka": ["casl", "casrilanka"],
+};
+
+export function foldUniversityText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function significantWords(name: string): string[] {
+  return foldUniversityText(name)
+    .split(" ")
+    .filter((word) => word && !STOP_WORDS.has(word));
+}
+
+function parenToken(name: string): string {
+  const match = name.match(/\(([^)]+)\)/);
+  if (!match?.[1]) return "";
+  return match[1].toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+interface UniversitySearchContext {
+  name: string;
+  words: string[];
+  paren: string;
+  domains: string[];
+  labels: string[];
+  aliases: string[];
+}
+
+function searchContext(uni: UniversityOption): UniversitySearchContext {
+  const name = foldUniversityText(uni.name);
+  const domains = (uni.domains ?? [])
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean);
+  return {
+    name,
+    words: significantWords(uni.name),
+    paren: parenToken(uni.name),
+    domains,
+    labels: domains.map((domain) => domain.split(".")[0] ?? "").filter(Boolean),
+    aliases: [...(SEARCH_ALIASES[name] ?? [])],
+  };
+}
+
+function startsWithToken(value: string, token: string): boolean {
+  return value === token || value.startsWith(token);
+}
+
+function tokenMatches(token: string, ctx: UniversitySearchContext): boolean {
+  if (token.length <= 2) {
+    return (
+      ctx.words.some(
+        (word) =>
+          word === token ||
+          (word.startsWith(token) && word.length <= token.length + 2),
+      ) ||
+      ctx.paren === token ||
+      ctx.paren.startsWith(token) ||
+      ctx.labels.some((label) => label === token || label.startsWith(token)) ||
+      ctx.aliases.some((alias) => alias === token || alias.startsWith(token))
+    );
+  }
+
+  return (
+    ctx.words.some((word) => startsWithToken(word, token)) ||
+    ctx.paren === token ||
+    ctx.paren.startsWith(token) ||
+    ctx.labels.some((label) => startsWithToken(label, token)) ||
+    ctx.domains.some((domain) => domain.startsWith(token)) ||
+    ctx.aliases.some(
+      (alias) => alias === token || alias.startsWith(token) || alias.includes(token),
+    )
+  );
+}
+
+function scoreUniversity(
+  ctx: UniversitySearchContext,
+  foldedQuery: string,
+  compact: string,
+  tokens: readonly string[],
+): number {
+  let score = 0;
+  if (ctx.name === foldedQuery) score += 300;
+  else if (ctx.name.startsWith(foldedQuery)) score += 80;
+
+  if (ctx.paren && ctx.paren === compact) score += 240;
+  else if (ctx.paren && compact.length >= 2 && ctx.paren.startsWith(compact)) {
+    score += 120;
+  }
+
+  if (ctx.labels.some((label) => label === compact)) score += 200;
+  else if (
+    compact.length >= 2 &&
+    ctx.labels.some((label) => label.startsWith(compact))
+  ) {
+    score += 90;
+  }
+
+  if (ctx.aliases.some((alias) => alias === compact || alias === foldedQuery)) {
+    score += 180;
+  }
+
+  for (const token of tokens) {
+    if (ctx.words.some((word) => word === token)) score += 40;
+    else if (ctx.words.some((word) => word.startsWith(token))) score += 26;
+    if (ctx.domains.some((domain) => domain.startsWith(token))) score += 14;
+    if (ctx.aliases.some((alias) => alias.includes(token))) score += 18;
+  }
+
+  score += Math.max(0, 6 - ctx.words.length);
+  return score;
+}
+
+/** Ranked university search: name, short form (SLIIT), domain, and common aliases. */
+export function searchUniversities(
+  options: readonly UniversityOption[],
+  query: string,
+): UniversityOption[] {
+  const sorted = [...options].sort((a, b) => a.name.localeCompare(b.name));
+  const foldedQuery = foldUniversityText(query);
+  if (!foldedQuery) return sorted;
+
+  const rawTokens = foldedQuery.split(" ").filter(Boolean);
+  if (rawTokens.every((token) => STOP_WORDS.has(token))) return sorted;
+
+  const tokens = rawTokens.filter(
+    (token) => !STOP_WORDS.has(token) && !DOMAIN_NOISE.has(token),
+  );
+  if (!tokens.length) return [];
+  const compact = foldedQuery.replace(/ /g, "");
+
+  return sorted
+    .map((uni) => {
+      const ctx = searchContext(uni);
+      if (!tokens.every((token) => tokenMatches(token, ctx))) return null;
+      return { uni, score: scoreUniversity(ctx, foldedQuery, compact, tokens) };
+    })
+    .filter(
+      (row): row is { uni: UniversityOption; score: number } => row != null,
+    )
+    .sort(
+      (a, b) => b.score - a.score || a.uni.name.localeCompare(b.uni.name),
+    )
+    .map((row) => row.uni);
+}
+
+export function customUniversityName(query: string): string {
+  return query.trim().replace(/\s+/g, " ").slice(0, 80);
+}
+
+/**
+ * Offer a free-text university only when nothing in the list matches.
+ * A hit on the name, short form, or email domain means they should pick that row.
+ */
+export function shouldOfferCustomUniversity(
+  options: readonly UniversityOption[],
+  query: string,
+): boolean {
+  const trimmed = customUniversityName(query);
+  if (trimmed.length < 2) return false;
+  const tokens = foldUniversityText(trimmed)
+    .split(" ")
+    .filter((token) => token && !STOP_WORDS.has(token) && !DOMAIN_NOISE.has(token));
+  if (!tokens.length || tokens.join("").length < 2) return false;
+  return searchUniversities(options, trimmed).length === 0;
+}
