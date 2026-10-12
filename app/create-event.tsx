@@ -2,15 +2,13 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll } from "@/components/KeyboardForm";
 import { DateTimeField } from "@/components/DateTimeField";
 import { FormField } from "@/components/FormField";
 import {
@@ -238,18 +236,14 @@ export default function CreateEventScreen() {
   ]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardFormScroll
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      contentContainerStyle={{
+        padding: spacing.lg,
+        paddingBottom: insets.bottom + spacing.xxl,
+        gap: spacing.lg,
+      }}
     >
-      <ScrollView
-        contentContainerStyle={{
-          padding: spacing.lg,
-          paddingBottom: insets.bottom + spacing.xxl,
-          gap: spacing.lg,
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
         <Text style={styles.lead}>
           Submit your event for review. It appears on the public feed once an
           admin approves it.
@@ -346,8 +340,7 @@ export default function CreateEventScreen() {
           loading={isSubmitting}
           onPress={() => void handleSubmit()}
         />
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
   );
 }
 

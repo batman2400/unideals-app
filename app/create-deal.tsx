@@ -2,10 +2,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -14,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll } from "@/components/KeyboardForm";
 import { DateTimeField } from "@/components/DateTimeField";
 import { FormField } from "@/components/FormField";
 import {
@@ -264,18 +262,14 @@ export default function CreateDealScreen() {
   ]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardFormScroll
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      contentContainerStyle={{
+        padding: spacing.lg,
+        paddingBottom: insets.bottom + spacing.xxl,
+        gap: spacing.lg,
+      }}
     >
-      <ScrollView
-        contentContainerStyle={{
-          padding: spacing.lg,
-          paddingBottom: insets.bottom + spacing.xxl,
-          gap: spacing.lg,
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
         <Text style={styles.lead}>
           Complete the fields below and publish. Students will see the deal
           immediately, or as Coming Soon if you set a future start date.
@@ -403,8 +397,7 @@ export default function CreateDealScreen() {
           disabled={brandLoading || !brandName}
           onPress={() => void handleSubmit()}
         />
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
   );
 }
 

@@ -16,6 +16,7 @@ import {
 } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useKeyboardInset } from "@/components/KeyboardForm";
 import { useAdminPendingEvents } from "@/lib/useAdmin";
 import { colors, radius, spacing } from "@/theme";
 import type { CampusEvent } from "@/types/database";
@@ -202,6 +203,7 @@ export default function AdminPendingEventsScreen() {
     reject,
   } = useAdminPendingEvents();
   const [rejectTarget, setRejectTarget] = useState<CampusEvent | null>(null);
+  const keyboardInset = useKeyboardInset();
   const [rejectReason, setRejectReason] = useState("");
 
   const confirmAndroidReject = () => {
@@ -310,7 +312,7 @@ export default function AdminPendingEventsScreen() {
         onRequestClose={() => setRejectTarget(null)}
       >
         <Pressable
-          style={styles.modalBackdrop}
+          style={[styles.modalBackdrop, { paddingBottom: spacing.lg + keyboardInset }]}
           onPress={() => setRejectTarget(null)}
         >
           <Pressable style={styles.modalCard} onPress={() => {}}>

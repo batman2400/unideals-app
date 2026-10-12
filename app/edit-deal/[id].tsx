@@ -3,10 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -15,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll } from "@/components/KeyboardForm";
 import { DateTimeField } from "@/components/DateTimeField";
 import { FormField } from "@/components/FormField";
 import {
@@ -407,18 +405,14 @@ export default function EditDealScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardFormScroll
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      contentContainerStyle={{
+        padding: spacing.lg,
+        paddingBottom: insets.bottom + spacing.xxl,
+        gap: spacing.lg,
+      }}
     >
-      <ScrollView
-        contentContainerStyle={{
-          padding: spacing.lg,
-          paddingBottom: insets.bottom + spacing.xxl,
-          gap: spacing.lg,
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
         <Text style={styles.lead}>
           Update your offer details for {brandName || "your brand"}.
         </Text>
@@ -546,8 +540,7 @@ export default function EditDealScreen() {
           variant="ghost"
           onPress={() => router.back()}
         />
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
   );
 }
 

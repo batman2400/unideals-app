@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
 import { DealCard } from "@/components/DealCard";
+import { PerkCard } from "@/components/PerkCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { SearchEntryRow } from "@/components/SearchEntryRow";
 import { SegmentedControl } from "@/components/SegmentedControl";
@@ -25,6 +26,7 @@ import { partitionDeals } from "@/lib/eventTiming";
 import { asScheduleParam } from "@/lib/routeParams";
 import { useDeals } from "@/lib/useDeals";
 import { useSavedDeals } from "@/lib/useSavedDeals";
+import { useStudentPerks } from "@/lib/useStudentPerks";
 import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import { OFFICIAL_DEAL_CATEGORIES } from "@/types/database";
@@ -39,22 +41,41 @@ const CATEGORIES = [
 ];
 
 type ScheduleTab = "all" | "live" | "coming_soon";
+type CatalogueTab = "local" | "perks";
 
 export default function DealsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ schedule?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    schedule?: string | string[];
+    catalogue?: string | string[];
+  }>();
   const { deals, isLoading, isRefreshing, error, refresh } = useDeals();
+  const {
+    perks,
+    isLoading: perksLoading,
+    isRefreshing: perksRefreshing,
+    error: perksError,
+    refresh: refreshPerks,
+  } = useStudentPerks();
   const { savedIds, isLoading: savedLoading, toggleSave } = useSavedDeals();
   const { openSearch } = useTabBarMotion();
   const onScroll = useTabBarCollapseScrollHandler();
   const [activeCategory, setActiveCategory] = useState("All");
   const [scheduleTab, setScheduleTab] = useState<ScheduleTab>("all");
+  const [catalogue, setCatalogue] = useState<CatalogueTab>("local");
 
   useEffect(() => {
     const schedule = asScheduleParam(params.schedule);
     if (schedule) setScheduleTab(schedule);
   }, [params.schedule]);
+
+  useEffect(() => {
+    const value = Array.isArray(params.catalogue)
+      ? params.catalogue[0]
+      : params.catalogue;
+    if (value === "perks" || value === "local") setCatalogue(value);
+  }, [params.catalogue]);
 
   const { live, comingSoon } = useMemo(() => partitionDeals(deals), [deals]);
 
@@ -88,10 +109,31 @@ export default function DealsScreen() {
           </Pressable>
         </View>
         <SearchEntryRow
-          placeholder="Search deals, brands, categories"
-          onPress={(layout) => openSearch(layout, { scope: "deals" })}
+          placeholder={
+            catalogue === "perks"
+              ? "Search global student perks"
+              : "Search deals, brands, categories"
+          }
+          onPress={(layout) =>
+            openSearch(layout, {
+              scope: catalogue === "perks" ? "perks" : "deals",
+            })
+          }
         />
 
+        <View style={styles.scheduleWrap}>
+          <SegmentedControl
+            value={catalogue}
+            onChange={setCatalogue}
+            options={[
+              { value: "local", label: "Local deals" },
+              { value: "perks", label: "Global perks" },
+            ]}
+          />
+        </View>
+
+        {catalogue === "local" ? (
+        <>
         <View style={styles.scheduleWrap}>
           <SegmentedControl
             value={scheduleTab}
@@ -132,9 +174,62 @@ export default function DealsScreen() {
             );
           })}
         </ScrollView>
+        </>
+        ) : null}
       </View>
 
-      {isLoading ? (
+      {catalogue === "perks" ? (
+        perksLoading ? (
+          <ListSkeleton count={4} />
+        ) : (
+          <Animated.FlatList
+            data={perks}
+            keyExtractor={(perk) => perk.id}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: floatingTabBarScrollPadding(insets.bottom) },
+            ]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={perksRefreshing}
+                onRefresh={() => void refreshPerks()}
+                tintColor={colors.primary}
+              />
+            }
+            renderItem={({ item }) => (
+              <PerkCard
+                perk={item}
+                onPress={() => router.push(`/perk/${item.id}` as Href)}
+              />
+            )}
+            ListHeaderComponent={
+              <View style={styles.perkIntro}>
+                <Text style={styles.stateBody}>
+                  These offers come from the provider. Uni Deals does not check
+                  eligibility or give you a code.
+                </Text>
+                {perksError ? (
+                  <Button label="Retry" onPress={() => void refreshPerks()} />
+                ) : null}
+              </View>
+            }
+            ListEmptyComponent={
+              <View style={styles.stateBlock}>
+                <Text style={styles.stateTitle}>
+                  {perksError ? "Could not load perks" : "No global perks yet"}
+                </Text>
+                <Text style={styles.stateBody}>
+                  {perksError ??
+                    "Provider offers will show here after they are published."}
+                </Text>
+              </View>
+            }
+          />
+        )
+      ) : isLoading ? (
         <ListSkeleton count={4} />
       ) : (
         <Animated.FlatList
@@ -261,6 +356,10 @@ const styles = StyleSheet.create({
   },
   pillTextActive: {
     color: colors.onPrimary,
+  },
+  perkIntro: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   listContent: {
     paddingHorizontal: spacing.lg,

@@ -13,10 +13,11 @@ import {
   Store,
   Trash2,
 } from "lucide-react-native";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -24,12 +25,17 @@ import {
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useKeyboardScroll } from "@/components/KeyboardForm";
 import { SettingsGroup } from "@/components/SettingsGroup";
 import { StudentIdCard } from "@/components/StudentIdCard";
 import { VerificationPanel } from "@/components/VerificationPanel";
 import { useAuth } from "@/context/AuthContext";
 import { useTabBarCollapseScrollHandler } from "@/context/TabBarMotionContext";
 import { deleteOwnAccount } from "@/lib/deleteAccount";
+import {
+  applicationSubtitle,
+  useBrandApplication,
+} from "@/lib/useBrandApplication";
 import { formatVerificationExpiry } from "@/lib/studentVerification";
 import { useStudentVerificationRequest } from "@/lib/useVerificationRequest";
 import { floatingTabBarScrollPadding } from "@/lib/tabBar";
@@ -65,10 +71,15 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
   } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const keyboardInset = useKeyboardScroll(scrollRef);
   const onScroll = useTabBarCollapseScrollHandler();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [verificationFormOpen, setVerificationFormOpen] = useState(false);
+  const brandApplication = useBrandApplication(
+    role === "student" ? user?.id : null,
+  );
 
   const isTrusted = isVerified || role === "partner" || role === "admin";
   const fullName =
@@ -157,13 +168,20 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
 
   return (
     <Animated.ScrollView
+      ref={scrollRef}
       style={styles.root}
       onScroll={onScroll}
       scrollEventThrottle={16}
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + spacing.lg },
-        { paddingBottom: floatingTabBarScrollPadding(insets.bottom) },
+        {
+          paddingBottom:
+            keyboardInset > 0
+              ? keyboardInset + spacing.lg
+              : floatingTabBarScrollPadding(insets.bottom),
+        },
       ]}
     >
       {showDefaultStudentSections ? (
@@ -276,6 +294,20 @@ export function ProfileScreen({ extraSections }: ProfileScreenProps) {
             icon: <Pencil color={colors.primary} size={18} />,
             onPress: () => router.push("/edit-profile" as Href),
           },
+          ...(role === "student"
+            ? [
+                {
+                  key: "become-partner",
+                  label: "Become a partner",
+                  subtitle: applicationSubtitle(
+                    brandApplication.application,
+                    brandApplication.isLoading,
+                  ),
+                  icon: <Store color={colors.primary} size={18} />,
+                  onPress: () => router.push("/become-partner" as Href),
+                },
+              ]
+            : []),
           ...(role === "partner"
             ? [
                 {

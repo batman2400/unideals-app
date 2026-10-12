@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { Check, Pause, Play, Search, Trash2 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,11 @@ import {
   View,
 } from "react-native";
 
+import {
+  requestKeyboardScroll,
+  useKeyboardScroll,
+  withKeyboardPadding,
+} from "@/components/KeyboardForm";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import {
   useAdminDeals,
@@ -239,13 +244,17 @@ export function AdminDealsView({
     setDealStatus,
     deleteDeal,
   } = useAdminDeals(activeFilter, searchQuery);
+  const listRef = useRef<FlatList<(typeof deals)[number]>>(null);
+  const keyboardInset = useKeyboardScroll(listRef);
 
   return (
     <View style={styles.root}>
       <FlatList
+        ref={listRef}
         data={deals}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={withKeyboardPadding(styles.list, keyboardInset)}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -285,6 +294,7 @@ export function AdminDealsView({
                 style={styles.searchInput}
                 autoCapitalize="none"
                 autoCorrect={false}
+                onFocus={requestKeyboardScroll}
               />
             </View>
             {finishedOnly ? null : (

@@ -2,10 +2,8 @@ import { Eye, EyeOff, Lock, Mail, User } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +13,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll, requestKeyboardScroll } from "@/components/KeyboardForm";
 import {
   AuthDivider,
   GoogleSignInButton,
@@ -179,17 +178,13 @@ export default function LoginScreen() {
   }, [isBusy, signInWithGoogle]);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <KeyboardFormScroll
       style={styles.flex}
+      contentContainerStyle={[
+        styles.scroll,
+        { paddingTop: insets.top + spacing.xxl, paddingBottom: insets.bottom + spacing.xxl },
+      ]}
     >
-      <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: insets.top + spacing.xxl, paddingBottom: insets.bottom + spacing.xxl },
-        ]}
-        keyboardShouldPersistTaps="handled"
-      >
         <View style={styles.brandBlock}>
           <Image
             accessibilityLabel="Uni Deals logo"
@@ -328,8 +323,7 @@ export default function LoginScreen() {
             </Text>
           )}
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
   );
 }
 
@@ -367,6 +361,7 @@ function Field({
         placeholderTextColor={colors.inverseOnSurface}
         value={value}
         onChangeText={onChangeText}
+        onFocus={requestKeyboardScroll}
         autoCapitalize={autoCapitalize}
         autoComplete={autoComplete}
         autoCorrect={false}

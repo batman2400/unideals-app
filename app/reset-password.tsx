@@ -1,16 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll, requestKeyboardScroll } from "@/components/KeyboardForm";
 import { useAuth } from "@/context/AuthContext";
 import {
   PASSWORD_HINT,
@@ -147,19 +141,17 @@ export default function ResetPasswordScreen() {
   }, [isAuthenticated, signOut, clearPasswordRecovery, router]);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <KeyboardFormScroll
       style={styles.flex}
+      contentContainerStyle={[
+        styles.content,
+        {
+          flexGrow: 1,
+          paddingTop: insets.top + spacing.xxl,
+          paddingBottom: insets.bottom + spacing.xxl,
+        },
+      ]}
     >
-      <View
-        style={[
-          styles.content,
-          {
-            paddingTop: insets.top + spacing.xxl,
-            paddingBottom: insets.bottom + spacing.xxl,
-          },
-        ]}
-      >
         <Text style={styles.title}>Set a new password</Text>
         <Text style={styles.subtitle}>{PASSWORD_HINT}</Text>
 
@@ -192,6 +184,7 @@ export default function ResetPasswordScreen() {
               secureTextEntry
               value={password}
               onChangeText={setPassword}
+              onFocus={requestKeyboardScroll}
               autoCapitalize="none"
               textContentType="newPassword"
             />
@@ -202,6 +195,7 @@ export default function ResetPasswordScreen() {
               secureTextEntry
               value={confirm}
               onChangeText={setConfirm}
+              onFocus={requestKeyboardScroll}
               autoCapitalize="none"
               textContentType="newPassword"
             />
@@ -213,8 +207,7 @@ export default function ResetPasswordScreen() {
             />
           </View>
         ) : null}
-      </View>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
   );
 }
 
@@ -224,7 +217,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: spacing.xl,
     gap: spacing.lg,

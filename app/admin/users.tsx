@@ -8,7 +8,7 @@ import {
   Search,
   UserPlus,
 } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,11 @@ import {
 } from "react-native";
 
 import { Button } from "@/components/Button";
+import {
+  requestKeyboardScroll,
+  useKeyboardScroll,
+  withKeyboardPadding,
+} from "@/components/KeyboardForm";
 import { FormField } from "@/components/FormField";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Select } from "@/components/Select";
@@ -213,6 +218,8 @@ export default function AdminUsersScreen() {
     promote,
     demote,
   } = useAdminUsers(roleFilter, searchQuery);
+  const listRef = useRef<FlatList<(typeof users)[number]>>(null);
+  const keyboardInset = useKeyboardScroll(listRef);
 
   const brandOptions = useMemo(
     () => [
@@ -263,9 +270,11 @@ export default function AdminUsersScreen() {
   return (
     <View style={styles.root}>
       <FlatList
+        ref={listRef}
         data={users}
         keyExtractor={(item) => item.userId}
-        contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={withKeyboardPadding(styles.list, keyboardInset)}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -338,6 +347,7 @@ export default function AdminUsersScreen() {
                 style={styles.searchInput}
                 autoCapitalize="none"
                 autoCorrect={false}
+                onFocus={requestKeyboardScroll}
               />
             </View>
             <SegmentedControl

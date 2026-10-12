@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
 import { Bookmark } from "lucide-react-native";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import {
   Dimensions,
   ImageBackground,
@@ -17,7 +17,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
 import { SaveDealButton } from "@/components/DealCard";
+import { PerkCard } from "@/components/PerkCard";
 import { BrandExploreField } from "@/components/BrandExploreField";
+import { useKeyboardScroll } from "@/components/KeyboardForm";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { useTabBarCollapseScrollHandler } from "@/context/TabBarMotionContext";
 import {
@@ -29,6 +31,7 @@ import {
 } from "@/lib/eventTiming";
 import { useDeals } from "@/lib/useDeals";
 import { useEvents } from "@/lib/useEvents";
+import { useStudentPerks } from "@/lib/useStudentPerks";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
@@ -41,6 +44,8 @@ const CARD_RADIUS = 16;
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const keyboardInset = useKeyboardScroll(scrollRef);
   const onScroll = useTabBarCollapseScrollHandler();
   const {
     deals,
@@ -57,6 +62,13 @@ export default function HomeScreen() {
     refresh: refreshEvents,
   } = useEvents();
   const { savedIds, isLoading: savedLoading, toggleSave } = useSavedDeals();
+  const {
+    perks,
+    isLoading: perksLoading,
+    isRefreshing: perksRefreshing,
+    error: perksError,
+    refresh: refreshPerks,
+  } = useStudentPerks();
 
   const { live: liveDeals, comingSoon: comingSoonDeals } = useMemo(
     () => partitionDeals(deals),
@@ -75,18 +87,23 @@ export default function HomeScreen() {
   );
   const trendingEvents = activeEvents.slice(0, 6);
 
-  const isRefreshing = dealsRefreshing || eventsRefreshing;
+  const isRefreshing = dealsRefreshing || eventsRefreshing || perksRefreshing;
 
   const refresh = async () => {
-    await Promise.all([refreshDeals(), refreshEvents()]);
+    await Promise.all([refreshDeals(), refreshEvents(), refreshPerks()]);
   };
 
   return (
     <Animated.ScrollView
+      ref={scrollRef}
       style={styles.root}
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
         paddingTop: insets.top + spacing.sm,
-        paddingBottom: floatingTabBarScrollPadding(insets.bottom),
+        paddingBottom:
+          keyboardInset > 0
+            ? keyboardInset + spacing.lg
+            : floatingTabBarScrollPadding(insets.bottom),
       }}
       onScroll={onScroll}
       scrollEventThrottle={16}
@@ -155,6 +172,40 @@ export default function HomeScreen() {
         </HeroCarousel>
       ) : !dealsLoading ? (
         <Text style={styles.emptyInline}>No live deals available yet.</Text>
+      ) : null}
+
+      {perksLoading || perks.length > 0 || perksError ? (
+        <>
+          <SectionHeader
+            title="Global student perks"
+            actionLabel="View all"
+            onAction={() =>
+              router.push({
+                pathname: "/deals",
+                params: { catalogue: "perks" },
+              } as Href)
+            }
+          />
+          {perksError ? (
+            <View style={styles.errorBlock}>
+              <Text style={styles.errorText}>{perksError}</Text>
+              <Button label="Retry" onPress={() => void refreshPerks()} />
+            </View>
+          ) : perksLoading ? (
+            <ListSkeleton variant="carousel" count={3} />
+          ) : (
+            <HeroCarousel>
+              {perks.map((perk) => (
+                <PerkCard
+                  key={perk.id}
+                  perk={perk}
+                  variant="carousel"
+                  onPress={() => router.push(`/perk/${perk.id}` as Href)}
+                />
+              ))}
+            </HeroCarousel>
+          )}
+        </>
       ) : null}
 
       {eventsError ? (

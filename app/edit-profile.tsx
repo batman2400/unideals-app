@@ -1,16 +1,10 @@
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll } from "@/components/KeyboardForm";
 import { FormField } from "@/components/FormField";
 import {
   ImagePickerField,
@@ -152,17 +146,13 @@ export default function EditProfileScreen() {
   ]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardFormScroll
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      contentContainerStyle={[
+        styles.content,
+        { paddingBottom: insets.bottom + spacing.xxl },
+      ]}
     >
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + spacing.xxl },
-        ]}
-        keyboardShouldPersistTaps="handled"
-      >
         <Text style={styles.lead}>
           {isStudent
             ? "Update your photo and academic details. These appear on your student pass."
@@ -265,8 +255,7 @@ export default function EditProfileScreen() {
           disabled={isSaving || isUploadingAvatar}
           onPress={() => router.back()}
         />
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
   );
 }
 

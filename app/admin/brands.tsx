@@ -8,7 +8,6 @@ import {
   Modal,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -16,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll } from "@/components/KeyboardForm";
 import { FormField } from "@/components/FormField";
 import {
   ImagePickerField,
@@ -279,12 +279,11 @@ export default function AdminBrandsScreen() {
               <Text style={styles.modalClose}>Close</Text>
             </Pressable>
           </View>
-          <ScrollView
+          <KeyboardFormScroll
             contentContainerStyle={[
               styles.modalBody,
               { paddingBottom: insets.bottom + spacing.xxl },
             ]}
-            keyboardShouldPersistTaps="handled"
           >
             <FormField
               label="Name"
@@ -348,7 +347,7 @@ export default function AdminBrandsScreen() {
                 style={styles.modalBtn}
               />
             </View>
-          </ScrollView>
+          </KeyboardFormScroll>
         </View>
       </Modal>
     </View>

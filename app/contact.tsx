@@ -1,17 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BadgeCheck } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll } from "@/components/KeyboardForm";
 import { FormField } from "@/components/FormField";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/context/AuthContext";
@@ -29,7 +23,7 @@ export default function ContactScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, metadata } = useAuth();
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; message?: string }>();
 
   const [name, setName] = useState(
     metadata.full_name?.trim() || metadata.name?.trim() || "",
@@ -39,7 +33,10 @@ export default function ContactScreen() {
     parseInquiryType(params.type),
   );
   const [brandName, setBrandName] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => {
+    const value = params.message;
+    return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,17 +109,13 @@ export default function ContactScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardFormScroll
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      contentContainerStyle={[
+        styles.content,
+        { paddingBottom: insets.bottom + spacing.xxl },
+      ]}
     >
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + spacing.xxl },
-        ]}
-        keyboardShouldPersistTaps="handled"
-      >
         <Text style={styles.lead}>
           Whether you have a question, want to host an event, or apply as a
           brand partner, we’re here to help. We aim to reply within 24–48 hours
@@ -173,8 +166,7 @@ export default function ContactScreen() {
           loading={isSubmitting}
           onPress={() => void handleSubmit()}
         />
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
   );
 }
 

@@ -5,6 +5,7 @@ import {
   BadgeCheck,
   CheckCircle2,
   Clock,
+  Flag,
   Store,
   Ticket,
 } from "lucide-react-native";
@@ -174,6 +175,22 @@ export default function DealDetailScreen() {
             storeUrl={deal.storeUrl}
           />
         )}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            router.push({
+              pathname: "/contact",
+              params: {
+                type: "support",
+                message: `I'd like to report this deal.\n\nDeal: ${deal.title}\nBrand: ${deal.brand}\nId: ${deal.id}\n\nWhat happened:\n`,
+              },
+            } as Href)
+          }
+          style={styles.reportButton}
+        >
+          <Flag color={colors.onSurfaceVariant} size={16} />
+          <Text style={styles.reportLabel}>Report this deal</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -620,6 +637,18 @@ const styles = StyleSheet.create({
   body: {
     padding: spacing.lg,
     gap: spacing.md,
+  },
+  reportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    alignSelf: "flex-start",
+    paddingVertical: spacing.sm,
+  },
+  reportLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.onSurfaceVariant,
   },
   brand: {
     fontSize: 11,

@@ -3,8 +3,8 @@ export interface LegalSection {
   body: string;
 }
 
-export const TERMS_UPDATED = "September 1, 2026";
-export const PRIVACY_UPDATED = "October 3, 2026";
+export const TERMS_UPDATED = "October 12, 2026";
+export const PRIVACY_UPDATED = "October 12, 2026";
 export const DELETE_ACCOUNT_URL = "https://www.unideals.co/delete-account";
 
 export const TERMS_SECTIONS: readonly LegalSection[] = [
@@ -18,7 +18,7 @@ export const TERMS_SECTIONS: readonly LegalSection[] = [
   },
   {
     heading: "3. Partner-Provided Offers",
-    body: "Discounts, redemption terms, inventory, and fulfillment are provided and managed by third-party partners. Uni Deals acts as a discovery and access layer and does not own, manufacture, or fulfill partner products and services. Partners remain responsible for the accuracy, legality, availability, and execution of their offers.",
+    body: "Discounts, redemption terms, inventory, and fulfillment are provided and managed by third-party partners. Uni Deals acts as a discovery and access layer and does not own, manufacture, or fulfill partner products and services. Partners remain responsible for the accuracy, legality, availability, and execution of their offers. Brand applications are reviewed before a business can publish offers. The applicant stays a student until an admin approves the application. After approval, changes to the public brand name or logo are held until an admin approves them. Global student perks listed on Uni Deals are offered by the provider, not by Uni Deals. We do not check eligibility for those programs, issue their codes, or take a referral fee. The provider's own terms apply, and an offer can change or end without notice.",
   },
   {
     heading: "4. Acceptable Use",
@@ -69,7 +69,7 @@ export const PRIVACY_SECTIONS: readonly LegalSection[] = [
   },
   {
     heading: "3. Information We Collect",
-    body: "We may collect account and profile data such as name, email address, user role, university-related verification details, usage events, and saved deal interactions. Partner and admin users may also provide business and offer-management details relevant to campaign publishing.\n\nIf you verify with a student ID, we collect photos of that document (front and, when requested, back). If you use the Uni Deals mobile app and enable notifications, we store a device push token so we can send the alerts you chose. We do not collect payment card details on Uni Deals.",
+    body: "We may collect account and profile data such as name, email address, user role, university-related verification details, usage events, and saved deal interactions. Partner and admin users may also provide business and offer-management details relevant to campaign publishing. If you apply to become a partner, we collect the brand name, a contact name and phone number, a website or social profile, and an optional logo so we can review the application. Approved brands are shown to students. If you open a global student perk, we send you to that provider's own site. We do not send your Uni Deals account to the provider. Anything you submit there is covered by the provider's policy.\n\nIf you verify with a student ID, we collect photos of that document (front and, when requested, back). If you use the Uni Deals mobile app and enable notifications, we store a device push token so we can send the alerts you chose. We do not collect payment card details on Uni Deals.",
   },
   {
     heading: "4. How We Use Your Data",

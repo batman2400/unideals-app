@@ -26,7 +26,7 @@ import {
   type MeasuredLayout,
 } from "@/lib/tabBar";
 
-export type SearchScope = "all" | "deals" | "events" | "brands";
+export type SearchScope = "all" | "deals" | "events" | "brands" | "perks";
 
 type OpenSearchOptions = {
   scope?: SearchScope;

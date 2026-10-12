@@ -8,7 +8,6 @@ import {
   Modal,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -17,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll } from "@/components/KeyboardForm";
 import { FormField } from "@/components/FormField";
 import { useAdminBlog } from "@/lib/useAdminBlog";
 import { colors, radius, spacing } from "@/theme";
@@ -291,12 +291,11 @@ export default function AdminBlogScreen() {
               <Text style={styles.modalClose}>Close</Text>
             </Pressable>
           </View>
-          <ScrollView
+          <KeyboardFormScroll
             contentContainerStyle={[
               styles.modalBody,
               { paddingBottom: insets.bottom + spacing.xxl },
             ]}
-            keyboardShouldPersistTaps="handled"
           >
             <FormField
               label="Title"
@@ -364,7 +363,7 @@ export default function AdminBlogScreen() {
                 style={styles.modalBtn}
               />
             </View>
-          </ScrollView>
+          </KeyboardFormScroll>
         </View>
       </Modal>
     </View>

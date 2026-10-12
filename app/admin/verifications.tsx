@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import { Check, X } from "lucide-react-native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,11 @@ import {
   View,
 } from "react-native";
 
+import {
+  requestKeyboardScroll,
+  useKeyboardScroll,
+  withKeyboardPadding,
+} from "@/components/KeyboardForm";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import {
   type VerificationProofUrls,
@@ -155,6 +160,7 @@ function VerificationCard({
               placeholderTextColor={colors.inverseOnSurface}
               value={note}
               onChangeText={setNote}
+              onFocus={requestKeyboardScroll}
             />
             <View style={styles.actions}>
               <Pressable
@@ -247,6 +253,8 @@ export default function AdminVerificationsScreen() {
     () => verifications.filter((item) => inQueue(item, queue)),
     [queue, verifications],
   );
+  const listRef = useRef<FlatList<(typeof visible)[number]>>(null);
+  const keyboardInset = useKeyboardScroll(listRef);
 
   const confirmApprove = useCallback(
     (item: ManualVerification) => {
@@ -270,9 +278,11 @@ export default function AdminVerificationsScreen() {
   return (
     <View style={styles.root}>
       <FlatList
+        ref={listRef}
         data={visible}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={withKeyboardPadding(styles.list, keyboardInset)}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}

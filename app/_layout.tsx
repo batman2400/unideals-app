@@ -142,6 +142,16 @@ function NavigationGuard() {
       <Stack.Protected guard={isAuthenticated && !isPasswordRecovery}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
+          name="perk/[id]"
+          options={{
+            headerShown: true,
+            title: "Perk",
+            headerTintColor: colors.primary,
+            headerStyle: { backgroundColor: colors.background },
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
           name="deal/[id]"
           options={{
             headerShown: true,
@@ -194,6 +204,10 @@ function NavigationGuard() {
         <Stack.Screen
           name="contact"
           options={{ ...stackHeader, title: "Contact" }}
+        />
+        <Stack.Screen
+          name="become-partner"
+          options={{ ...stackHeader, title: "Become a partner" }}
         />
         <Stack.Screen
           name="terms"
@@ -286,6 +300,14 @@ function NavigationGuard() {
         <Stack.Screen
           name="admin/brands"
           options={{ ...stackHeader, title: "Brands" }}
+        />
+        <Stack.Screen
+          name="admin/brand-applications"
+          options={{ ...stackHeader, title: "Brand applications" }}
+        />
+        <Stack.Screen
+          name="admin/perks"
+          options={{ ...stackHeader, title: "Student Perks" }}
         />
         <Stack.Screen
           name="admin/analytics"

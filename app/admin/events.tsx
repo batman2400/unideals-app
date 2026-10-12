@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { CalendarDays, Search, Trash2 } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,11 @@ import {
   View,
 } from "react-native";
 
+import {
+  requestKeyboardScroll,
+  useKeyboardScroll,
+  withKeyboardPadding,
+} from "@/components/KeyboardForm";
 import { isComingSoonEvent, isFinishedEvent } from "@/lib/eventTiming";
 import { useAdminEvents } from "@/lib/useAdmin";
 import { colors, radius, spacing } from "@/theme";
@@ -188,13 +193,17 @@ export function AdminEventsView({
     }
     return events.filter((event) => eventBucket(event) !== "finished");
   }, [events, finishedOnly]);
+  const listRef = useRef<FlatList<(typeof filteredEvents)[number]>>(null);
+  const keyboardInset = useKeyboardScroll(listRef);
 
   return (
     <View style={styles.root}>
       <FlatList
+        ref={listRef}
         data={filteredEvents}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={withKeyboardPadding(styles.list, keyboardInset)}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -229,6 +238,7 @@ export function AdminEventsView({
                 style={styles.searchInput}
                 autoCapitalize="none"
                 autoCorrect={false}
+                onFocus={requestKeyboardScroll}
               />
             </View>
           </View>

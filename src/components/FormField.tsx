@@ -1,5 +1,7 @@
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 
+import { requestKeyboardScroll } from "@/components/KeyboardForm";
+
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 
 interface FormFieldProps extends TextInputProps {
@@ -13,6 +15,7 @@ export function FormField({
   hint,
   error,
   style,
+  onFocus,
   ...inputProps
 }: FormFieldProps) {
   return (
@@ -22,6 +25,10 @@ export function FormField({
         placeholderTextColor={colors.inverseOnSurface}
         style={[styles.input, inputProps.multiline && styles.multiline, style]}
         {...inputProps}
+        onFocus={(event) => {
+          onFocus?.(event);
+          requestKeyboardScroll();
+        }}
       />
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}

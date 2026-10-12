@@ -11,16 +11,14 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { Button } from "@/components/Button";
+import { KeyboardFormScroll, requestKeyboardScroll } from "@/components/KeyboardForm";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import {
@@ -158,14 +156,9 @@ export default function PartnerScannerScreen() {
   }, [permission, requestPermission]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardFormScroll
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-    <ScrollView
-      style={styles.flex}
       contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
       <View style={styles.header}>
@@ -217,6 +210,7 @@ export default function PartnerScannerScreen() {
             placeholderTextColor={colors.inverseOnSurface}
             value={manualCode}
             onChangeText={(text) => setManualCode(text.toUpperCase())}
+            onFocus={requestKeyboardScroll}
             autoCapitalize="characters"
             autoCorrect={false}
             returnKeyType="done"
@@ -283,8 +277,7 @@ export default function PartnerScannerScreen() {
           </Pressable>
         </View>
       ) : null}
-    </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
   );
 }
 

@@ -12,8 +12,10 @@ import {
   History,
   Mail,
   Package,
+  Store,
   QrCode,
   ShieldCheck,
+  Sparkles,
   Users,
 } from "lucide-react-native";
 import {
@@ -186,6 +188,13 @@ export default function AdminDashboardScreen() {
               icon: <Mail color={colors.primary} size={20} />,
               onPress: () => router.push("/admin/inquiries" as Href),
             },
+            {
+              key: "brand-applications",
+              label: "Brand applications",
+              subtitle: "New brands and name or logo changes",
+              icon: <Store color={colors.primary} size={20} />,
+              onPress: () => router.push("/admin/brand-applications" as Href),
+            },
           ]}
         />
 
@@ -215,6 +224,13 @@ export default function AdminDashboardScreen() {
               label: "Finished Events",
               icon: <Clock3 color={colors.primary} size={20} />,
               onPress: () => router.push("/admin/finished-events" as Href),
+            },
+            {
+              key: "perks",
+              label: "Student Perks",
+              subtitle: "Global offers from other providers",
+              icon: <Sparkles color={colors.primary} size={20} />,
+              onPress: () => router.push("/admin/perks" as Href),
             },
             {
               key: "blog",

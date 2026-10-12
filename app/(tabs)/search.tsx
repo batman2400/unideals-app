@@ -3,8 +3,6 @@ import { ChevronLeft, Search } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -15,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BrandResultRow } from "@/components/BrandResultRow";
+import { useKeyboardInset } from "@/components/KeyboardForm";
 import { Button } from "@/components/Button";
 import { DealCard } from "@/components/DealCard";
 import { EventCard } from "@/components/EventCard";
@@ -42,6 +41,9 @@ import {
   type DealBrandSummary,
 } from "@/lib/useDeals";
 import { filterEvents, useEvents } from "@/lib/useEvents";
+import { filterPerks, type StudentPerk } from "@/lib/studentPerks";
+import { useStudentPerks } from "@/lib/useStudentPerks";
+import { PerkCard } from "@/components/PerkCard";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import type { CampusEvent, Deal } from "@/types/database";
@@ -50,11 +52,17 @@ type SearchItem =
   | { kind: "header"; id: string; title: string }
   | { kind: "brand"; id: string; brand: DealBrandSummary }
   | { kind: "deal"; id: string; deal: Deal }
-  | { kind: "event"; id: string; event: CampusEvent };
+  | { kind: "event"; id: string; event: CampusEvent }
+  | { kind: "perk"; id: string; perk: StudentPerk };
 
 function asSearchScope(param: string | string[] | undefined): SearchScope {
   const value = Array.isArray(param) ? param[0] : param;
-  if (value === "deals" || value === "events" || value === "brands") {
+  if (
+    value === "deals" ||
+    value === "events" ||
+    value === "brands" ||
+    value === "perks"
+  ) {
     return value;
   }
   return "all";
@@ -75,6 +83,12 @@ export default function SearchScreen() {
   const { events, isLoading: eventsLoading, isRefreshing: eventsRefreshing, error: eventsError, refresh: refreshEvents } =
     useEvents();
   const { savedIds, isLoading: savedLoading, toggleSave } = useSavedDeals();
+  const {
+    perks,
+    isLoading: perksLoading,
+    isRefreshing: perksRefreshing,
+    refresh: refreshPerks,
+  } = useStudentPerks();
 
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>(() =>
@@ -125,17 +139,21 @@ export default function SearchScreen() {
     const next: SearchItem[] = [];
 
     const matchedBrands =
-      scope === "deals" || scope === "events"
+      scope === "deals" || scope === "events" || scope === "perks"
         ? []
         : filterDealBrands(brands, query);
     const matchedDeals =
-      scope === "events" || scope === "brands"
+      scope === "events" || scope === "brands" || scope === "perks"
         ? []
         : filterDeals(dealPool, query);
     const matchedEvents =
-      scope === "deals" || scope === "brands"
+      scope === "deals" || scope === "brands" || scope === "perks"
         ? []
         : filterEvents(eventPool, query);
+    const matchedPerks =
+      scope === "deals" || scope === "events" || scope === "brands"
+        ? []
+        : filterPerks(perks, query);
 
     const brandSlice =
       trimmed || scope === "brands"
@@ -143,6 +161,8 @@ export default function SearchScreen() {
         : matchedBrands.slice(0, 6);
     const dealSlice = trimmed ? matchedDeals : matchedDeals.slice(0, 8);
     const eventSlice = trimmed ? matchedEvents : matchedEvents.slice(0, 6);
+    const perkSlice =
+      trimmed || scope === "perks" ? matchedPerks : matchedPerks.slice(0, 6);
 
     if (brandSlice.length > 0) {
       next.push({
@@ -168,6 +188,16 @@ export default function SearchScreen() {
         next.push({ kind: "deal", id: `deal-${deal.id}`, deal });
       }
     }
+    if (perkSlice.length > 0) {
+      next.push({
+        kind: "header",
+        id: "header-perks",
+        title: trimmed || scope === "perks" ? "Global perks" : "Suggested perks",
+      });
+      for (const perk of perkSlice) {
+        next.push({ kind: "perk", id: `perk-${perk.id}`, perk });
+      }
+    }
     if (eventSlice.length > 0) {
       next.push({
         kind: "header",
@@ -179,17 +209,16 @@ export default function SearchScreen() {
       }
     }
     return next;
-  }, [brands, dealPool, eventPool, query, scope]);
+  }, [brands, dealPool, eventPool, perks, query, scope]);
 
-  const isLoading = dealsLoading || eventsLoading;
-  const isRefreshing = dealsRefreshing || eventsRefreshing;
+  const keyboardInset = useKeyboardInset();
+  const isLoading =
+    dealsLoading || eventsLoading || (scope === "perks" && perksLoading);
+  const isRefreshing = dealsRefreshing || eventsRefreshing || perksRefreshing;
   const error = dealsError || eventsError;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={styles.root}>
       <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable
@@ -212,7 +241,9 @@ export default function SearchScreen() {
             placeholder={
               scope === "brands"
                 ? "e.g. Spa Ceylon"
-                : "Search deals, events, and brands"
+                : scope === "perks"
+                  ? "Search global student perks"
+                  : "Search deals, events, and brands"
             }
             placeholderTextColor={colors.inverseOnSurface}
             value={query}
@@ -250,6 +281,7 @@ export default function SearchScreen() {
               { value: "deals", label: "Deals" },
               { value: "events", label: "Events" },
               { value: "brands", label: "Brands" },
+              { value: "perks", label: "Perks" },
             ]}
           />
         </View>
@@ -264,7 +296,12 @@ export default function SearchScreen() {
           keyboardDismissMode="on-drag"
           contentContainerStyle={[
             styles.listContent,
-            { paddingBottom: floatingTabBarScrollPadding(insets.bottom) },
+            {
+              paddingBottom:
+                keyboardInset > 0
+                  ? keyboardInset + 24
+                  : floatingTabBarScrollPadding(insets.bottom),
+            },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -273,6 +310,7 @@ export default function SearchScreen() {
               onRefresh={() => {
                 void refreshDeals();
                 void refreshEvents();
+                void refreshPerks();
               }}
               tintColor={colors.primary}
             />
@@ -288,6 +326,14 @@ export default function SearchScreen() {
                   onPress={(brand) =>
                     router.push(brandHubPath(brand.name) as Href)
                   }
+                />
+              );
+            }
+            if (item.kind === "perk") {
+              return (
+                <PerkCard
+                  perk={item.perk}
+                  onPress={() => router.push(`/perk/${item.perk.id}` as Href)}
                 />
               );
             }
@@ -318,6 +364,7 @@ export default function SearchScreen() {
                   onPress={() => {
                     void refreshDeals();
                     void refreshEvents();
+                    void refreshPerks();
                   }}
                 />
               </View>
@@ -331,7 +378,7 @@ export default function SearchScreen() {
               <Text style={styles.stateBody}>
                 {error
                   ? error
-                  : "Try a different search term or switch All / Deals / Events / Brands."}
+                  : "Try a different search term or switch All / Deals / Events / Brands / Perks."}
               </Text>
             </View>
           }
@@ -339,7 +386,7 @@ export default function SearchScreen() {
       )}
       </View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

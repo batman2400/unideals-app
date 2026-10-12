@@ -1,6 +1,8 @@
 import { ArrowRight } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+
+import { requestKeyboardScroll } from "@/components/KeyboardForm";
 import { useRouter, type Href } from "expo-router";
 
 import { useTabBarMotion } from "@/context/TabBarMotionContext";
@@ -48,6 +50,7 @@ export function BrandExploreField({ brandNames }: { brandNames: string[] }) {
           placeholderTextColor={colors.inverseOnSurface}
           value={query}
           onChangeText={setQuery}
+          onFocus={requestKeyboardScroll}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"

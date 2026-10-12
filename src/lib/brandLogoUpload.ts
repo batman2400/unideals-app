@@ -83,3 +83,51 @@ export async function uploadBrandLogo(
 
   return { publicUrl: data.publicUrl, filePath };
 }
+
+const USER_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function uploadApplicationLogo(input: {
+  uri: string;
+  userId: string;
+  mimeType?: string | null;
+  fileSize?: number | null;
+}): Promise<UploadBrandLogoResult> {
+  if (!USER_ID_PATTERN.test(input.userId)) {
+    throw new Error("Sign in again before uploading a logo.");
+  }
+
+  if (input.fileSize != null && input.fileSize > MAX_BYTES) {
+    throw new Error("Image is too large. Maximum size is 5MB.");
+  }
+
+  if (input.mimeType && !input.mimeType.startsWith("image/")) {
+    throw new Error("Only image files are allowed.");
+  }
+
+  const ext = extensionFromUri(input.uri, input.mimeType);
+  const filePath = `applications/${input.userId}/${Date.now()}-${randomSuffix()}.${ext}`;
+  const contentType = input.mimeType?.startsWith("image/")
+    ? input.mimeType
+    : `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+  await uploadLocalFile({
+    bucket: BRAND_LOGOS_BUCKET,
+    path: filePath,
+    uri: input.uri,
+    contentType,
+    maxBytes: MAX_BYTES,
+    tooLargeMessage: "Image is too large. Maximum size is 5MB.",
+    errorMessage: "Failed to upload logo.",
+  });
+
+  const { data } = supabase.storage
+    .from(BRAND_LOGOS_BUCKET)
+    .getPublicUrl(filePath);
+
+  if (!data.publicUrl) {
+    throw new Error("Logo uploaded but URL could not be resolved.");
+  }
+
+  return { publicUrl: data.publicUrl, filePath };
+}
