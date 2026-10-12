@@ -11,7 +11,6 @@ import { isAllowedStudentEmail } from "@/lib/studentEmailDomain";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { isVerificationInFlight } from "@/lib/useVerificationRequest";
 import {
-  OTHER_UNIVERSITY,
   emailMatchesUniversity,
   findUniversityByEmail,
   mergeUniversityOptions,
@@ -66,6 +65,7 @@ export function VerificationPanel({
   const [path, setPath] = useState<VerifyPath>(
     isSchoolStudent ? "manual" : "email_otp",
   );
+  const [manualName, setManualName] = useState("");
   const [allowedDomains, setAllowedDomains] = useState<string[]>([]);
   const [dbUniversities, setDbUniversities] = useState<UniversityDomainRow[]>(
     [],
@@ -129,6 +129,10 @@ export function VerificationPanel({
       <EmailOtpForm
         allowedDomains={allowedDomains}
         universities={universities}
+        onNotListed={(name) => {
+          if (name.length >= 2) setManualName(name);
+          setPath("manual");
+        }}
         intro={
           inFlight
             ? "Have a university email? Choose your university and enter the code we send to verify immediately without waiting for ID review."
@@ -211,7 +215,7 @@ export function VerificationPanel({
         <Text style={styles.body}>
           {isSchoolStudent
             ? "School students send both sides of a student ID for admin review. Verification is valid for 12 months."
-            : "A correct code sent to your university email verifies you immediately. Upload a student ID only if you do not have an institute email."}
+            : "A correct code sent to your university email verifies you immediately. If your university is not listed, upload your student ID for review."}
         </Text>
       )}
 
@@ -219,7 +223,7 @@ export function VerificationPanel({
         <SegmentedControl
           options={[
             { value: "email_otp", label: "University email" },
-            { value: "manual", label: "Manual / school" },
+            { value: "manual", label: "Student ID" },
           ]}
           value={path}
           onChange={setPath}
@@ -233,7 +237,7 @@ export function VerificationPanel({
           userId={user?.id}
           accountEmail={user?.email ?? ""}
           defaultType={isSchoolStudent ? "school" : "university"}
-          universities={universities}
+          initialName={manualName}
           onSubmitted={onRequestChange}
         />
       )}
@@ -249,26 +253,27 @@ function EmailOtpForm({
   allowedDomains,
   universities,
   intro,
+  onNotListed,
   onSubmitted,
 }: {
   allowedDomains: readonly string[];
   universities: readonly UniversityOption[];
   intro: string;
+  onNotListed: (name: string) => void;
   onSubmitted: () => void;
 }) {
   const [uniEmail, setUniEmail] = useState("");
   const [selectedUni, setSelectedUni] = useState("");
-  const [otherUniName, setOtherUniName] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [otpCode, setOtpCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  const chosenUniversityName = useCallback(() => {
-    if (selectedUni === OTHER_UNIVERSITY) return otherUniName.trim();
-    return selectedUni.trim();
-  }, [otherUniName, selectedUni]);
+  const chosenUniversityName = useCallback(
+    () => selectedUni.trim(),
+    [selectedUni],
+  );
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -279,10 +284,7 @@ function EmailOtpForm({
   const applyEmailUniversityMatch = useCallback(
     (email: string) => {
       const match = findUniversityByEmail(email, universities);
-      if (match) {
-        setSelectedUni(match.name);
-        setOtherUniName("");
-      }
+      if (match) setSelectedUni(match.name);
     },
     [universities],
   );
@@ -295,10 +297,7 @@ function EmailOtpForm({
     if (!isAllowedStudentEmail(normalized, allowedDomains)) {
       return "Please use your official university or institutional student email.";
     }
-    const selected: UniversityOption | undefined =
-      selectedUni === OTHER_UNIVERSITY
-        ? { name: institution, domains: [] }
-        : universities.find((uni) => uni.name === selectedUni);
+    const selected = universities.find((uni) => uni.name === selectedUni);
     if (selected && !emailMatchesUniversity(normalized, selected)) {
       const hint = selected.domains[0]
         ? ` Use your @${selected.domains[0]} address.`
@@ -397,11 +396,8 @@ function EmailOtpForm({
       <UniversityPicker
         universities={universities}
         value={selectedUni}
-        otherName={otherUniName}
-        onChange={({ value, otherName }) => {
-          setSelectedUni(value);
-          setOtherUniName(otherName);
-        }}
+        onChange={setSelectedUni}
+        onNotListed={onNotListed}
       />
       <FormField
         label="University email"
@@ -464,19 +460,17 @@ function ManualForm({
   userId,
   accountEmail,
   defaultType,
-  universities,
+  initialName = "",
   onSubmitted,
 }: {
   userId: string | undefined;
   accountEmail: string;
   defaultType: InstitutionType;
-  universities: readonly UniversityOption[];
+  initialName?: string;
   onSubmitted: () => void;
 }) {
   const [instType, setInstType] = useState<InstitutionType>(defaultType);
-  const [instName, setInstName] = useState("");
-  const [selectedUni, setSelectedUni] = useState("");
-  const [otherUniName, setOtherUniName] = useState("");
+  const [instName, setInstName] = useState(initialName);
   const [course, setCourse] = useState("");
   const [studentId, setStudentId] = useState("");
   const [front, setFront] = useState<ProofAsset | null>(null);
@@ -484,12 +478,7 @@ function ManualForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const institutionName =
-    instType === "university"
-      ? selectedUni === OTHER_UNIVERSITY
-        ? otherUniName.trim()
-        : selectedUni.trim()
-      : instName.trim();
+  const institutionName = instName.trim();
 
   const submit = useCallback(async () => {
     setError(null);
@@ -560,8 +549,9 @@ function ManualForm({
   return (
     <View style={styles.form}>
       <Text style={styles.hint}>
-        Upload both sides of your student ID for admin review. You are not
-        verified until an admin approves. Status lasts 12 months.
+        Use this if your university is not on the email list, or you do not
+        have an institute email. Upload both sides of your student ID. An
+        admin reviews it before you are verified.
       </Text>
       <SegmentedControl
         options={[
@@ -571,24 +561,14 @@ function ManualForm({
         value={instType}
         onChange={setInstType}
       />
-      {instType === "university" ? (
-        <UniversityPicker
-          universities={universities}
-          value={selectedUni}
-          otherName={otherUniName}
-          onChange={({ value, otherName }) => {
-            setSelectedUni(value);
-            setOtherUniName(otherName);
-          }}
-        />
-      ) : (
-        <FormField
-          label="School name"
-          placeholder="School name"
-          value={instName}
-          onChangeText={setInstName}
-        />
-      )}
+      <FormField
+        label={instType === "school" ? "School name" : "University or institute"}
+        placeholder={
+          instType === "school" ? "School name" : "University or campus name"
+        }
+        value={instName}
+        onChangeText={setInstName}
+      />
       {instType === "university" ? (
         <>
           <FormField

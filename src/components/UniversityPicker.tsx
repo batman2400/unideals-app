@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Plus, Search, X } from "lucide-react-native";
+import { Check, ChevronDown, Search, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   FlatList,
@@ -15,10 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TAB_BAR_HEIGHT, floatingTabBarBottomOffset } from "@/lib/tabBar";
 import {
-  OTHER_UNIVERSITY,
-  customUniversityName,
   searchUniversities,
-  shouldOfferCustomUniversity,
   type UniversityOption,
 } from "@/lib/universities";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
@@ -26,17 +23,18 @@ import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 interface UniversityPickerProps {
   universities: readonly UniversityOption[];
   value: string;
-  otherName: string;
-  onChange: (next: { value: string; otherName: string }) => void;
+  onChange: (name: string) => void;
   label?: string;
+  /** Switches to student-ID review when the university is not on the list. */
+  onNotListed?: (query: string) => void;
 }
 
 export function UniversityPicker({
   universities,
   value,
-  otherName,
   onChange,
   label = "University",
+  onNotListed,
 }: UniversityPickerProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -47,14 +45,11 @@ export function UniversityPicker({
     () => universities.find((uni) => uni.name === value) ?? null,
     [universities, value],
   );
-  const isCustom = value === OTHER_UNIVERSITY && otherName.trim().length > 0;
-  const displayName = isCustom ? otherName.trim() : (selected?.name ?? "");
+  const displayName = selected?.name ?? "";
   const results = useMemo(
     () => searchUniversities(universities, query),
     [query, universities],
   );
-  const customName = customUniversityName(query);
-  const offerCustom = shouldOfferCustomUniversity(universities, query);
 
   const tabClearance =
     floatingTabBarBottomOffset(insets.bottom) + TAB_BAR_HEIGHT + spacing.md;
@@ -78,22 +73,16 @@ export function UniversityPicker({
   }
 
   function chooseListed(name: string) {
-    onChange({ value: name, otherName: "" });
+    onChange(name);
     close();
   }
 
-  function chooseCustom(name: string) {
-    const trimmed = customUniversityName(name);
-    if (trimmed.length < 2) return;
-    onChange({ value: OTHER_UNIVERSITY, otherName: trimmed });
+  function useManualVerification() {
+    onNotListed?.(query.trim().replace(/\s+/g, " "));
     close();
   }
 
-  const domainHint = selected
-    ? emailHint(selected.domains)
-    : isCustom
-      ? "Not in the list. Tap to change the name."
-      : null;
+  const domainHint = selected ? emailHint(selected.domains) : null;
 
   return (
     <View style={styles.wrap}>
@@ -104,7 +93,7 @@ export function UniversityPicker({
           displayName ? `${label}, ${displayName}` : "Search your university"
         }
         onPress={() => {
-          setQuery(isCustom ? otherName.trim() : "");
+          setQuery("");
           setOpen(true);
         }}
         style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
@@ -181,31 +170,12 @@ export function UniversityPicker({
               ) : null}
             </View>
 
-            {offerCustom ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => chooseCustom(customName)}
-                style={({ pressed }) => [
-                  styles.addRow,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <View style={styles.addIcon}>
-                  <Plus color={colors.primary} size={16} strokeWidth={2.4} />
-                </View>
-                <View style={styles.addCopy}>
-                  <Text style={styles.addTitle} numberOfLines={2}>
-                    Use “{customName}”
-                  </Text>
-                  <Text style={styles.addSub}>
-                    Not listed — save this name with your verification
-                  </Text>
-                </View>
-              </Pressable>
-            ) : query.trim() ? null : (
+            {query.trim() ? null : (
               <Text style={styles.searchHint}>
-                Search by name, short form, or email domain. Type the full name
-                to add one that is missing.
+                Search by name, short form, or email domain.
+                {onNotListed
+                  ? " If yours is not listed, verify with a student ID."
+                  : ""}
               </Text>
             )}
 
@@ -221,16 +191,43 @@ export function UniversityPicker({
                   <Text style={styles.emptyTitle}>
                     {universities.length === 0
                       ? "Universities are still loading"
-                      : `No match for “${customName || query.trim()}”`}
+                      : `No match for “${query.trim()}”`}
                   </Text>
                   <Text style={styles.emptyBody}>
                     {universities.length === 0
-                      ? "You can still type your university and add it above."
-                      : offerCustom
-                        ? "Check the spelling, or add that name with the button above."
+                      ? "The list will appear here in a moment."
+                      : onNotListed
+                        ? "This university is not on the email list. Upload your student ID and an admin will review it."
                         : "Try a name, a short form like SLIIT, or an email domain."}
                   </Text>
+                  {onNotListed && universities.length > 0 ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={useManualVerification}
+                      style={({ pressed }) => [
+                        styles.manualBtn,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={styles.manualBtnLabel}>
+                        Continue with student ID
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
+              }
+              ListFooterComponent={
+                onNotListed && results.length > 0 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={useManualVerification}
+                    style={styles.manualLink}
+                  >
+                    <Text style={styles.manualLinkLabel}>
+                      University not listed? Verify with a student ID
+                    </Text>
+                  </Pressable>
+                ) : null
               }
               renderItem={({ item }) => {
                 const isActive = item.name === value;
@@ -426,38 +423,6 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
     paddingHorizontal: spacing.xs,
   },
-  addRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLow,
-    borderWidth: 1,
-    borderColor: colors.primaryContainer,
-  },
-  addIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primaryContainer,
-  },
-  addCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  addTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.primary,
-  },
-  addSub: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.onSurfaceVariant,
-  },
   list: {
     flex: 1,
     minHeight: 0,
@@ -525,5 +490,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.onSurfaceVariant,
+  },
+  manualBtn: {
+    marginTop: spacing.sm,
+    minHeight: MIN_TAP_TARGET,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+  },
+  manualBtnLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.onPrimary,
+  },
+  manualLink: {
+    minHeight: MIN_TAP_TARGET,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  manualLinkLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
   },
 });

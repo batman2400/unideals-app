@@ -1,6 +1,4 @@
-/** Canonical Sri Lankan universities / institutes for the verification dropdown. */
-export const OTHER_UNIVERSITY = "__other__";
-
+/** Canonical Sri Lankan universities / institutes for the verification list. */
 export interface UniversityOption {
   name: string;
   domains: string[];
@@ -335,23 +333,3 @@ export function searchUniversities(
     .map((row) => row.uni);
 }
 
-export function customUniversityName(query: string): string {
-  return query.trim().replace(/\s+/g, " ").slice(0, 80);
-}
-
-/**
- * Offer a free-text university only when nothing in the list matches.
- * A hit on the name, short form, or email domain means they should pick that row.
- */
-export function shouldOfferCustomUniversity(
-  options: readonly UniversityOption[],
-  query: string,
-): boolean {
-  const trimmed = customUniversityName(query);
-  if (trimmed.length < 2) return false;
-  const tokens = foldUniversityText(trimmed)
-    .split(" ")
-    .filter((token) => token && !STOP_WORDS.has(token) && !DOMAIN_NOISE.has(token));
-  if (!tokens.length || tokens.join("").length < 2) return false;
-  return searchUniversities(options, trimmed).length === 0;
-}
