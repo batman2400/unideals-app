@@ -78,23 +78,6 @@ export function perkDisclaimer(providerName: string): string {
   return `Not affiliated with ${providerName}. Terms set by the provider.`;
 }
 
-const PERK_LOGOS: Record<string, string> = {
-  "GitHub Student Developer Pack": "https://www.unideals.co/perk-logos/github.svg",
-  "Google Gemini for students": "https://www.unideals.co/perk-logos/googlegemini.svg",
-  "JetBrains educational licenses": "https://www.unideals.co/perk-logos/jetbrains.svg",
-  "Autodesk Education": "https://www.unideals.co/perk-logos/autodesk.svg",
-  "Notion Education Plan": "https://www.unideals.co/perk-logos/notion.svg",
-  "Spotify Premium Student": "https://www.unideals.co/perk-logos/spotify.svg",
-  "YouTube Premium Student": "https://www.unideals.co/perk-logos/youtube.svg",
-  "Canva Education": "https://www.unideals.co/perk-logos/canva.svg",
-};
-
-export function perkLogoUrl(perk: Pick<StudentPerk, "providerName" | "logoUrl">): string | null {
-  const remote = perk.logoUrl?.trim() ?? "";
-  if (/^https:\/\//i.test(remote)) return remote;
-  return PERK_LOGOS[perk.providerName] ?? null;
-}
-
 export function formatVerifiedOn(isoDate: string | null): string | null {
   if (!isoDate) return null;
   const date = new Date(`${isoDate}T00:00:00`);

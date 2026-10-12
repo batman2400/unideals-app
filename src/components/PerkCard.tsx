@@ -1,10 +1,10 @@
-import { Image } from "expo-image";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { PerkLogo } from "@/components/PerkLogo";
 import {
   formatVerifiedOn,
+  officialHttpsUrl,
   perkDisclaimer,
-  perkLogoUrl,
   type StudentPerk,
 } from "@/lib/studentPerks";
 import { colors, radius, spacing } from "@/theme";
@@ -18,29 +18,18 @@ interface PerkCardProps {
 export function PerkCard({ perk, onPress, variant = "row" }: PerkCardProps) {
   const verified = formatVerifiedOn(perk.lastVerifiedOn);
   const carousel = variant === "carousel";
-  const logoUrl = perkLogoUrl(perk);
+  const offerUrl = officialHttpsUrl(perk.officialUrl);
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={perk.providerName}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        carousel && styles.carousel,
-        pressed && styles.pressed,
-      ]}
-    >
+    <View style={[styles.card, carousel && styles.carousel]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={perk.providerName}
+        onPress={onPress}
+        style={({ pressed }) => [styles.body, pressed && styles.pressed]}
+      >
       <View style={styles.top}>
-        {logoUrl ? (
-          <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="contain" />
-        ) : (
-          <View style={styles.logoFallback}>
-            <Text style={styles.logoLetter}>
-              {perk.providerName.slice(0, 1).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <PerkLogo providerName={perk.providerName} logoUrl={perk.logoUrl} />
         <View style={styles.titleWrap}>
           <Text style={styles.provider} numberOfLines={2}>
             {perk.providerName}
@@ -58,7 +47,23 @@ export function PerkCard({ perk, onPress, variant = "row" }: PerkCardProps) {
       ) : null}
       {verified ? <Text style={styles.meta}>Last verified on {verified}</Text> : null}
       <Text style={styles.disclaimer}>{perkDisclaimer(perk.providerName)}</Text>
-    </Pressable>
+      </Pressable>
+      {offerUrl ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`Get ${perk.providerName}`}
+          onPress={() => {
+            void Linking.openURL(offerUrl);
+          }}
+          style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.linkLabel}>Get this perk</Text>
+          <Text style={styles.linkUrl} numberOfLines={1}>
+            {offerUrl}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -74,6 +79,9 @@ const styles = StyleSheet.create({
   carousel: {
     width: 260,
   },
+  body: {
+    gap: spacing.sm,
+  },
   pressed: {
     opacity: 0.85,
   },
@@ -81,25 +89,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceVariant,
-  },
-  logoFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primaryContainer,
-  },
-  logoLetter: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.onPrimaryContainer,
   },
   titleWrap: {
     flex: 1,
@@ -128,6 +117,19 @@ const styles = StyleSheet.create({
   disclaimer: {
     fontSize: 11,
     lineHeight: 15,
+    color: colors.onSurfaceVariant,
+  },
+  linkButton: {
+    gap: 2,
+    paddingVertical: spacing.xs,
+  },
+  linkLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  linkUrl: {
+    fontSize: 12,
     color: colors.onSurfaceVariant,
   },
 });

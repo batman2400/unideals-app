@@ -1,9 +1,9 @@
-import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,14 +12,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { PerkLogo } from "@/components/PerkLogo";
 import {
   formatVerifiedOn,
   officialHttpsUrl,
   perkDisclaimer,
-  perkLogoUrl,
 } from "@/lib/studentPerks";
 import { useStudentPerk } from "@/lib/useStudentPerks";
-import { colors, radius, spacing } from "@/theme";
+import { colors, spacing } from "@/theme";
 
 export default function PerkDetailScreen() {
   const router = useRouter();
@@ -49,7 +49,6 @@ export default function PerkDetailScreen() {
 
   const verified = formatVerifiedOn(perk.lastVerifiedOn);
   const offerUrl = officialHttpsUrl(perk.officialUrl);
-  const logoUrl = perkLogoUrl(perk);
 
   return (
     <ScrollView
@@ -60,15 +59,7 @@ export default function PerkDetailScreen() {
       ]}
     >
       <View style={styles.header}>
-        {logoUrl ? (
-          <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="contain" />
-        ) : (
-          <View style={styles.logoFallback}>
-            <Text style={styles.logoLetter}>
-              {perk.providerName.slice(0, 1).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <PerkLogo providerName={perk.providerName} logoUrl={perk.logoUrl} size={56} />
         <View style={styles.headerText}>
           <Text style={styles.kicker}>Global student perk</Text>
           <Text style={styles.title}>{perk.providerName}</Text>
@@ -108,7 +99,7 @@ export default function PerkDetailScreen() {
 
       {linkError ? <Text style={styles.error}>{linkError}</Text> : null}
       <Button
-        label="Go to offer"
+        label="Get this perk"
         disabled={!offerUrl}
         onPress={() => {
           if (!offerUrl) {
@@ -120,6 +111,18 @@ export default function PerkDetailScreen() {
           });
         }}
       />
+      {offerUrl ? (
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => {
+            void Linking.openURL(offerUrl).catch(() => {
+              setLinkError("Couldn't open the provider's site.");
+            });
+          }}
+        >
+          <Text style={styles.url}>{offerUrl}</Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
@@ -149,24 +152,6 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
     gap: 2,
-  },
-  logo: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
-  },
-  logoFallback: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primaryContainer,
-  },
-  logoLetter: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: colors.onPrimaryContainer,
   },
   kicker: {
     fontSize: 12,
@@ -217,5 +202,10 @@ const styles = StyleSheet.create({
   error: {
     color: colors.error,
     fontSize: 14,
+  },
+  url: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.primary,
   },
 });
