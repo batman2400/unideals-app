@@ -37,11 +37,11 @@ scan QR tickets on an iPhone.
 | **Google sign-in** | Done for v1 (Option B) — hidden on iOS in `app/(auth)/login.tsx`. Android and web still show it. Help FAQ explains Forgot password for Google-created accounts |
 | Email/password login, reset via `unideals://reset-password` | Works on iOS (same custom scheme) |
 | In-app delete account (`src/lib/deleteAccount.ts`) + public `/delete-account` page | Done — satisfies 5.1.1(v) |
-| Session in Keychain (`src/lib/secureAuthStorage.ts`, chunked) | Done |
+| Session in Keychain (`src/lib/secureAuthStorage.ts`, chunked) | Done. Session + push Keychain calls go through `src/lib/keychainLock.ts` so they cannot overlap |
 | Push: `upsert_own_push_token` accepts `ios`; `notify-students` sends via Expo push (platform-agnostic) | Code ready. **Needs an APNs key** in Expo credentials |
-| iOS-specific UI paths (glass tab bar, `DateTimeField`, keyboard avoiding, `admin/pending-events`) | Coded, never tested on a real iPhone |
+| iOS-specific UI paths (glass tab bar, `DateTimeField`, keyboard avoiding, `admin/pending-events`) | Coded. TestFlight 1.0.0 (5) reached a real iPhone; Events-tab crash is the Keychain overlap below |
 | Third-party privacy manifests (`PrivacyInfo.xcprivacy`) | Shipped by RN / Expo / AsyncStorage pods; EAS aggregates them |
-| `eas.json` iOS submit profile | Missing (only Android under `submit.production`) |
+| `eas.json` iOS submit profile | Done — Team ID `WW88LS36YD`, App Store Connect app ID `6818631055` |
 | No ads, no analytics SDK, no tracking, no in-app purchases | Good — no App Tracking Transparency prompt, no IAP setup |
 | Legal copy (`src/lib/legalContent.ts`, website pages) | Platform-neutral — no Android-only wording to fix |
 
@@ -129,7 +129,7 @@ Unlike Play, Apple has **no** mandatory 14-day closed-testing period.
 
 ### 2.3 `eas.json`
 
-- [x] Add an iOS submit profile with Team ID `WW88LS36YD`. `ascAppId` is still missing until the App Store Connect app record exists (Phase 3).
+- [x] Add an iOS submit profile with Team ID `WW88LS36YD` and App Store Connect app ID `6818631055`.
 
   ```json
   "submit": {
@@ -153,9 +153,9 @@ Unlike Play, Apple has **no** mandatory 14-day closed-testing period.
 
 ### 2.5 Verify
 
-- [ ] `npm run typecheck`
-- [ ] `npx expo config --type introspect` and check the generated `ios.infoPlist`: camera + photo strings present, **no** `NSMicrophoneUsageDescription`, `ITSAppUsesNonExemptEncryption = false`
-- [ ] Commit before building (EAS builds the committed tree)
+- [x] `npm run typecheck`
+- [x] `npx expo config --type introspect` and check the generated `ios.infoPlist`: camera + photo strings present, **no** `NSMicrophoneUsageDescription`, `ITSAppUsesNonExemptEncryption = false`
+- [x] Commit before building (EAS builds the committed tree). Includes the Keychain lock (`src/lib/keychainLock.ts`) that serializes session SecureStore and `expo-notifications` Keychain reads. TestFlight 1.0.0 (5) crashed on iOS 26 when those overlapped (`EXC_BAD_ACCESS` in `SecItemCopyMatching` / `ServerRegistrationModule.getInstallationIdFromKeychain`, tester note: Events tab).
 
 ---
 

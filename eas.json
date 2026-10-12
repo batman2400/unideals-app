@@ -32,7 +32,8 @@
         "releaseStatus": "draft"
       },
       "ios": {
-        "appleTeamId": "WW88LS36YD"
+        "appleTeamId": "WW88LS36YD",
+        "ascAppId": "6818631055"
       }
     }
   }

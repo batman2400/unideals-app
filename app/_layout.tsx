@@ -120,10 +120,16 @@ function NavigationGuard() {
       }
     };
 
-    const initial = consumeInitialPushTarget();
-    if (initial) openTarget(initial);
+    let cancelled = false;
+    void consumeInitialPushTarget().then((initial) => {
+      if (!cancelled && initial) openTarget(initial);
+    });
 
-    return subscribeToPushResponses(openTarget);
+    const stopResponses = subscribeToPushResponses(openTarget);
+    return () => {
+      cancelled = true;
+      stopResponses();
+    };
   }, [isAuthenticated, isLoading, isPasswordRecovery, router]);
 
   return (

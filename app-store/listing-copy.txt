@@ -7,12 +7,14 @@ Subtitle (30)
 Student discounts in Sri Lanka
 
 Promotional text (170, editable without review)
-Verified student discounts at Sri Lankan partners. Online codes and in-store QR tickets.
+Verified student discounts and campus events in Sri Lanka. Online codes and in-store QR tickets.
 
 Description (4000)
 Uni Deals is the student discount app for Sri Lanka.
 
 Verified students unlock partner offers: online promo codes and in-store QR tickets. Create an account, verify with your university email or student ID, then browse deals and campus events.
+
+Campus events are listed on the Events tab. See what is on now and what is coming soon, open an event for the details, and submit a society event for review.
 
 Partners publish offers and scan student tickets at the register. There are no in-app purchases.
 
@@ -26,7 +28,7 @@ Terms: https://unideals.co/terms
 Delete account: https://www.unideals.co/delete-account
 
 Keywords (100, comma-separated)
-student,discount,deals,university,campus,offers,sri lanka,promo code,coupons
+student,discount,deals,events,university,campus,offers,sri lanka,promo code,coupons
 
 URLs
 Support URL: https://unideals.co
@@ -65,9 +67,11 @@ Sample live Online deal: <deal name> to test Reveal.
 Screenshots
 iPhone 6.9" (1320×2868 or 1290×2796 portrait), 3–10 images, captured from the TestFlight build.
 1. Home
-2. Deals list
-3. Deal with Reveal code
-4. In-store QR ticket
-5. Student Pass / verification
-6. Partner scanner
+2. Events tab
+3. An event
+4. Deals list
+5. Deal with Reveal code
+6. In-store QR ticket
+7. Student Pass / verification
+8. Partner scanner
 Do not reuse Android screenshots. No iPad set (supportsTablet is false).

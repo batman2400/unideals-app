@@ -24,5 +24,7 @@ yarn-error.*
 .DS_Store
 .idea/
 
+app store crash log/
+
 # google-services.json is gitignored but must still be uploaded for Android EAS builds.
 GoogleService-Info.plist

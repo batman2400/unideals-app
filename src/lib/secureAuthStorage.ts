@@ -12,6 +12,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
+import { withKeychainLock } from "@/lib/keychainLock";
+
 const CHUNK_SIZE = 1800;
 
 type AuthStorage = {
@@ -70,40 +72,46 @@ async function clearSecure(key: string): Promise<void> {
 }
 
 const nativeStorage: AuthStorage = {
-  async getItem(key) {
-    try {
-      const fromSecure = await readSecure(key);
-      if (fromSecure != null) return fromSecure;
-      const legacy = await AsyncStorage.getItem(key);
-      if (legacy != null) {
-        await writeSecure(key, legacy);
-        await AsyncStorage.removeItem(key);
-        return legacy;
+  getItem(key) {
+    return withKeychainLock(async () => {
+      try {
+        const fromSecure = await readSecure(key);
+        if (fromSecure != null) return fromSecure;
+        const legacy = await AsyncStorage.getItem(key);
+        if (legacy != null) {
+          await writeSecure(key, legacy);
+          await AsyncStorage.removeItem(key);
+          return legacy;
+        }
+        return null;
+      } catch (error) {
+        console.error("[auth-storage] getItem failed:", error);
+        return AsyncStorage.getItem(key);
       }
-      return null;
-    } catch (error) {
-      console.error("[auth-storage] getItem failed:", error);
-      return AsyncStorage.getItem(key);
-    }
+    });
   },
 
-  async setItem(key, value) {
-    try {
-      await writeSecure(key, value);
+  setItem(key, value) {
+    return withKeychainLock(async () => {
+      try {
+        await writeSecure(key, value);
+        await AsyncStorage.removeItem(key);
+      } catch (error) {
+        console.error("[auth-storage] setItem failed:", error);
+        await AsyncStorage.setItem(key, value);
+      }
+    });
+  },
+
+  removeItem(key) {
+    return withKeychainLock(async () => {
+      try {
+        await clearSecure(key);
+      } catch (error) {
+        console.error("[auth-storage] removeItem failed:", error);
+      }
       await AsyncStorage.removeItem(key);
-    } catch (error) {
-      console.error("[auth-storage] setItem failed:", error);
-      await AsyncStorage.setItem(key, value);
-    }
-  },
-
-  async removeItem(key) {
-    try {
-      await clearSecure(key);
-    } catch (error) {
-      console.error("[auth-storage] removeItem failed:", error);
-    }
-    await AsyncStorage.removeItem(key);
+    });
   },
 };
 

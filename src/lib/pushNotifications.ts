@@ -12,6 +12,7 @@ import Constants from "expo-constants";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { Platform } from "react-native";
 
+import { withKeychainLock } from "@/lib/keychainLock";
 import { supabase } from "@/lib/supabase";
 
 const TOKEN_CACHE_KEY = "unideals.push-token";
@@ -36,6 +37,11 @@ interface NotificationResponseLike {
 
 let didConsumeInitialResponse = false;
 let notificationsModule: NotificationsModule | null | undefined;
+let notificationsReady: Promise<NotificationsModule | null> | null = null;
+
+interface ServerRegistrationNative {
+  getRegistrationInfoAsync?: () => Promise<string | null>;
+}
 
 function easProjectId(): string | null {
   const fromEas = Constants.easConfig?.projectId;
@@ -78,6 +84,41 @@ function getNotifications(): NotificationsModule | null {
   }
 
   return notificationsModule;
+}
+
+/**
+ * First import of expo-notifications reads the Keychain immediately, and
+ * getExpoPushTokenAsync reads it again. Both have to wait for any session
+ * read to finish, then this drains that import-time read before returning.
+ */
+function ensureNotificationsReady(): Promise<NotificationsModule | null> {
+  if (notificationsReady) return notificationsReady;
+
+  notificationsReady = withKeychainLock(async () => {
+    const notifications = getNotifications();
+    if (!notifications) return null;
+    await drainServerRegistration();
+    return notifications;
+  }).catch((error: unknown) => {
+    notificationsReady = null;
+    throw error;
+  });
+
+  return notificationsReady;
+}
+
+async function drainServerRegistration(): Promise<void> {
+  const native = requireOptionalNativeModule<ServerRegistrationNative>(
+    "NotificationsServerRegistrationModule",
+  );
+  if (!native?.getRegistrationInfoAsync) return;
+
+  try {
+    await native.getRegistrationInfoAsync();
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : String(caught);
+    console.warn("[push] Keychain registration read skipped:", message);
+  }
 }
 
 async function readCachedToken(): Promise<string | null> {
@@ -134,18 +175,20 @@ async function permissionsGranted(
  * No-ops on web, simulators, older APKs, and when permission is denied.
  */
 export async function registerStudentPushToken(): Promise<void> {
-  const Notifications = getNotifications();
-  if (!Notifications) return;
-
   try {
+    const Notifications = await ensureNotificationsReady();
+    if (!Notifications) return;
+
     const allowed = await permissionsGranted(Notifications);
     if (!allowed) return;
 
     await ensureAndroidChannel(Notifications);
 
     const projectId = easProjectId();
-    const tokenResponse = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined,
+    const tokenResponse = await withKeychainLock(() =>
+      Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined,
+      ),
     );
     const token = tokenResponse.data;
     if (!token) return;
@@ -220,12 +263,12 @@ function targetFromResponse(
 }
 
 /** Cold-start tap. Safe to call once after auth is ready. */
-export function consumeInitialPushTarget(): PushTarget | null {
+export async function consumeInitialPushTarget(): Promise<PushTarget | null> {
   if (didConsumeInitialResponse || !canUsePush()) return null;
   didConsumeInitialResponse = true;
-  const Notifications = getNotifications();
-  if (!Notifications) return null;
   try {
+    const Notifications = await ensureNotificationsReady();
+    if (!Notifications) return null;
     const target = targetFromResponse(Notifications.getLastNotificationResponse());
     Notifications.clearLastNotificationResponse();
     return target;
@@ -237,26 +280,48 @@ export function consumeInitialPushTarget(): PushTarget | null {
 export function subscribeToPushResponses(
   onTarget: (target: PushTarget) => void,
 ): () => void {
-  const Notifications = getNotifications();
-  if (!Notifications) return () => {};
+  let subscription: { remove(): void } | null = null;
+  let cancelled = false;
 
-  const subscription = Notifications.addNotificationResponseReceivedListener(
-    (response) => {
-      const target = targetFromResponse(response);
-      if (target) onTarget(target);
-    },
-  );
+  void ensureNotificationsReady()
+    .then((Notifications) => {
+      if (cancelled || !Notifications) return;
+      subscription = Notifications.addNotificationResponseReceivedListener(
+        (response) => {
+          const target = targetFromResponse(response);
+          if (target) onTarget(target);
+        },
+      );
+    })
+    .catch((caught: unknown) => {
+      const message = caught instanceof Error ? caught.message : String(caught);
+      console.warn("[push] Response listener skipped:", message);
+    });
 
-  return () => subscription.remove();
+  return () => {
+    cancelled = true;
+    subscription?.remove();
+  };
 }
 
 export function subscribeToPushTokenRefresh(): () => void {
-  const Notifications = getNotifications();
-  if (!Notifications) return () => {};
+  let subscription: { remove(): void } | null = null;
+  let cancelled = false;
 
-  const subscription = Notifications.addPushTokenListener(() => {
-    void registerStudentPushToken();
-  });
+  void ensureNotificationsReady()
+    .then((Notifications) => {
+      if (cancelled || !Notifications) return;
+      subscription = Notifications.addPushTokenListener(() => {
+        void registerStudentPushToken();
+      });
+    })
+    .catch((caught: unknown) => {
+      const message = caught instanceof Error ? caught.message : String(caught);
+      console.warn("[push] Token refresh listener skipped:", message);
+    });
 
-  return () => subscription.remove();
+  return () => {
+    cancelled = true;
+    subscription?.remove();
+  };
 }

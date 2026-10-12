@@ -28,3 +28,6 @@ yarn-error.*
 
 .DS_Store
 .idea/
+
+# Local TestFlight crash reports (contain tester emails).
+app store crash log/
