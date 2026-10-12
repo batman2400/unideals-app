@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   formatVerifiedOn,
   perkDisclaimer,
+  perkLogoUrl,
   type StudentPerk,
 } from "@/lib/studentPerks";
 import { colors, radius, spacing } from "@/theme";
@@ -17,6 +18,7 @@ interface PerkCardProps {
 export function PerkCard({ perk, onPress, variant = "row" }: PerkCardProps) {
   const verified = formatVerifiedOn(perk.lastVerifiedOn);
   const carousel = variant === "carousel";
+  const logoUrl = perkLogoUrl(perk);
 
   return (
     <Pressable
@@ -30,8 +32,8 @@ export function PerkCard({ perk, onPress, variant = "row" }: PerkCardProps) {
       ]}
     >
       <View style={styles.top}>
-        {perk.logoUrl ? (
-          <Image source={{ uri: perk.logoUrl }} style={styles.logo} contentFit="cover" />
+        {logoUrl ? (
+          <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="contain" />
         ) : (
           <View style={styles.logoFallback}>
             <Text style={styles.logoLetter}>

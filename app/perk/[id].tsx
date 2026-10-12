@@ -16,6 +16,7 @@ import {
   formatVerifiedOn,
   officialHttpsUrl,
   perkDisclaimer,
+  perkLogoUrl,
 } from "@/lib/studentPerks";
 import { useStudentPerk } from "@/lib/useStudentPerks";
 import { colors, radius, spacing } from "@/theme";
@@ -48,6 +49,7 @@ export default function PerkDetailScreen() {
 
   const verified = formatVerifiedOn(perk.lastVerifiedOn);
   const offerUrl = officialHttpsUrl(perk.officialUrl);
+  const logoUrl = perkLogoUrl(perk);
 
   return (
     <ScrollView
@@ -58,8 +60,8 @@ export default function PerkDetailScreen() {
       ]}
     >
       <View style={styles.header}>
-        {perk.logoUrl ? (
-          <Image source={{ uri: perk.logoUrl }} style={styles.logo} contentFit="cover" />
+        {logoUrl ? (
+          <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="contain" />
         ) : (
           <View style={styles.logoFallback}>
             <Text style={styles.logoLetter}>
