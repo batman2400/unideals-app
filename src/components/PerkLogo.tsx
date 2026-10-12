@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { PACK_MARKS } from "@/components/perkBrandMarks";
 import { colors, radius } from "@/theme";
 
 const MARKS: Record<string, { fill: string; d: string }> = {
@@ -54,7 +55,7 @@ interface PerkLogoProps {
 
 export function PerkLogo({ providerName, logoUrl, size = 40 }: PerkLogoProps) {
   const remote = rasterLogo(logoUrl);
-  const mark = MARKS[providerName];
+  const mark = MARKS[providerName] ?? PACK_MARKS[providerName];
   const box = { width: size, height: size, borderRadius: radius.md };
 
   if (remote) {
