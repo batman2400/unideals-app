@@ -26,6 +26,7 @@ import { partitionDeals } from "@/lib/eventTiming";
 import { asScheduleParam } from "@/lib/routeParams";
 import { useDeals } from "@/lib/useDeals";
 import { useSavedDeals } from "@/lib/useSavedDeals";
+import { PERK_CATEGORIES } from "@/lib/studentPerks";
 import { useStudentPerks } from "@/lib/useStudentPerks";
 import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
@@ -64,6 +65,7 @@ export default function DealsScreen() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [scheduleTab, setScheduleTab] = useState<ScheduleTab>("all");
   const [catalogue, setCatalogue] = useState<CatalogueTab>("local");
+  const [perkCategory, setPerkCategory] = useState("All");
 
   useEffect(() => {
     const schedule = asScheduleParam(params.schedule);
@@ -78,6 +80,21 @@ export default function DealsScreen() {
   }, [params.catalogue]);
 
   const { live, comingSoon } = useMemo(() => partitionDeals(deals), [deals]);
+
+  const perkCategories = useMemo(
+    () => [
+      "All",
+      ...PERK_CATEGORIES.filter((category) =>
+        perks.some((perk) => perk.category === category),
+      ),
+    ],
+    [perks],
+  );
+
+  const filteredPerks = useMemo(() => {
+    if (perkCategory === "All") return perks;
+    return perks.filter((perk) => perk.category === perkCategory);
+  }, [perks, perkCategory]);
 
   const filteredDeals = useMemo(() => {
     // All: live first, then coming soon (nearest launch first).
@@ -175,7 +192,30 @@ export default function DealsScreen() {
           })}
         </ScrollView>
         </>
-        ) : null}
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryRow}
+          >
+            {perkCategories.map((category) => {
+              const isActive = category === perkCategory;
+              return (
+                <Pressable
+                  key={category}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  onPress={() => setPerkCategory(category)}
+                  style={[styles.pill, isActive && styles.pillActive]}
+                >
+                  <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
+                    {category}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       {catalogue === "perks" ? (
@@ -183,7 +223,7 @@ export default function DealsScreen() {
           <ListSkeleton count={4} />
         ) : (
           <Animated.FlatList
-            data={perks}
+            data={filteredPerks}
             keyExtractor={(perk) => perk.id}
             onScroll={onScroll}
             scrollEventThrottle={16}
@@ -219,11 +259,17 @@ export default function DealsScreen() {
             ListEmptyComponent={
               <View style={styles.stateBlock}>
                 <Text style={styles.stateTitle}>
-                  {perksError ? "Could not load perks" : "No global perks yet"}
+                  {perksError
+                    ? "Could not load perks"
+                    : perkCategory === "All"
+                      ? "No global perks yet"
+                      : `No ${perkCategory} perks`}
                 </Text>
                 <Text style={styles.stateBody}>
                   {perksError ??
-                    "Provider offers will show here after they are published."}
+                    (perkCategory === "All"
+                      ? "Provider offers will show here after they are published."
+                      : "Try another category.")}
                 </Text>
               </View>
             }

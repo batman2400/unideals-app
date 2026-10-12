@@ -46,12 +46,16 @@ export const PERK_SELECT = `
 `;
 
 export const PERK_CATEGORIES = [
-  "Software",
   "AI",
+  "Learning",
   "Design",
   "Cloud",
-  "Learning",
-  "Other",
+  "Software",
+  "Domains",
+  "Security",
+  "Productivity",
+  "Music",
+  "Video",
 ] as const;
 
 export function mapStudentPerk(row: StudentPerkRow): StudentPerk {
