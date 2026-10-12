@@ -57,6 +57,10 @@ export default function BecomePartnerScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const categoryOptions = useMemo(
+    () => categoryOptionsFor(category),
+    [category],
+  );
 
   useEffect(() => {
     if (!application) return;
@@ -166,10 +170,6 @@ export default function BecomePartnerScreen() {
   }
 
   const locked = application?.status === "suspended";
-  const categoryOptions = useMemo(
-    () => categoryOptionsFor(category),
-    [category],
-  );
 
   return (
     <KeyboardFormScroll

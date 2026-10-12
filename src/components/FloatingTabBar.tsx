@@ -19,14 +19,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SearchChip } from "@/components/SearchChip";
 import { useTabBarMotion } from "@/context/TabBarMotionContext";
 import {
-  SEARCH_CHIP_EXPANDED_WIDTH,
   TAB_BAR_HEIGHT,
-  TAB_BAR_HORIZONTAL_INSET,
-  TAB_CHIP_GAP,
   TAB_ICON_SIZE,
   floatingTabBarBottomOffset,
+  resolveFloatingTabBarLayout,
 } from "@/lib/tabBar";
-import { colors } from "@/theme";
+import { MIN_TAP_TARGET, colors } from "@/theme";
 
 type FloatingTabBarProps = Parameters<
   NonNullable<ComponentProps<typeof Tabs>["tabBar"]>
@@ -43,6 +41,12 @@ export function FloatingTabBar({
   navigation,
 }: FloatingTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const barLayout = resolveFloatingTabBarLayout(
+    windowWidth,
+    insets.left,
+    insets.right,
+  );
   const { lastTabRef, leaveSearch, closeSearchMorph } = useTabBarMotion();
   const focusedName = state.routes[state.index]?.name ?? "index";
   const onSearch = focusedName === "search";
@@ -97,15 +101,6 @@ export function FloatingTabBar({
     ],
   }));
 
-  const leftInset = Math.max(
-    TAB_BAR_HORIZONTAL_INSET,
-    insets.left + TAB_BAR_HORIZONTAL_INSET,
-  );
-  const rightInset = Math.max(
-    TAB_BAR_HORIZONTAL_INSET,
-    insets.right + TAB_BAR_HORIZONTAL_INSET,
-  );
-
   const renderTab = (item: { route: TabRoute; index: number }) => (
     <TabItem
       key={item.route.key}
@@ -115,8 +110,8 @@ export function FloatingTabBar({
       navigation={navigation}
       onSearch={onSearch}
       onLeaveSearch={leaveSearch}
-      leftInset={leftInset}
-      rightInset={rightInset}
+      pillWidth={barLayout.pillWidth}
+      pillHeight={barLayout.pillHeight}
     />
   );
 
@@ -127,15 +122,16 @@ export function FloatingTabBar({
         styles.wrap,
         {
           bottom: floatingTabBarBottomOffset(insets.bottom),
-          left: leftInset,
-          right: rightInset,
+          left: barLayout.left,
+          right: barLayout.right,
+          gap: barLayout.gap,
         },
         wrapStyle,
       ]}
     >
       {baseTabs[0] ? renderTab(baseTabs[0]) : null}
       {baseTabs[1] ? renderTab(baseTabs[1]) : null}
-      <SearchChip onSearch={onSearch} />
+      <SearchChip onSearch={onSearch} width={barLayout.searchWidth} />
       {baseTabs[2] ? renderTab(baseTabs[2]) : null}
       {baseTabs[3] ? renderTab(baseTabs[3]) : null}
     </Animated.View>
@@ -149,8 +145,8 @@ function TabItem({
   navigation,
   onSearch,
   onLeaveSearch,
-  leftInset,
-  rightInset,
+  pillWidth,
+  pillHeight,
 }: {
   route: TabRoute;
   focused: boolean;
@@ -158,10 +154,9 @@ function TabItem({
   navigation: FloatingTabBarProps["navigation"];
   onSearch: boolean;
   onLeaveSearch: (tabName: string) => void;
-  leftInset: number;
-  rightInset: number;
+  pillWidth: number;
+  pillHeight: number;
 }) {
-  const { width: windowWidth } = useWindowDimensions();
   const scale = useSharedValue(1);
   const options = descriptor?.options;
   const color = focused ? colors.primary : "#6B7280";
@@ -172,23 +167,25 @@ function TabItem({
     size: TAB_ICON_SIZE,
   });
 
-  const pillStyle = useAnimatedStyle(() => {
-    const available =
-      windowWidth -
-      (leftInset + rightInset) -
-      SEARCH_CHIP_EXPANDED_WIDTH -
-      TAB_CHIP_GAP * 4;
-    return {
-      width: Math.max(48, available / 4),
-      transform: [{ scale: scale.value }],
-    };
-  });
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const tapSlack = Math.max(
+    0,
+    (MIN_TAP_TARGET - Math.min(pillWidth, pillHeight)) / 2,
+  );
 
   return (
     <AnimatedPressable
       accessibilityRole="button"
       accessibilityState={{ selected: focused }}
       accessibilityLabel={options?.tabBarAccessibilityLabel ?? label}
+      hitSlop={{
+        top: tapSlack,
+        bottom: tapSlack,
+        left: tapSlack,
+        right: tapSlack,
+      }}
       onPressIn={() => {
         scale.value = withTiming(0.94, { duration: 90 });
       }}
@@ -209,7 +206,15 @@ function TabItem({
           navigation.navigate(route.name, route.params);
         }
       }}
-      style={[styles.pill, pillStyle]}
+      style={[
+        styles.pill,
+        {
+          width: pillWidth,
+          height: pillHeight,
+          borderRadius: pillHeight / 2,
+        },
+        pillStyle,
+      ]}
     >
       {icon}
     </AnimatedPressable>
@@ -222,14 +227,12 @@ const styles = StyleSheet.create({
     height: TAB_BAR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    gap: TAB_CHIP_GAP,
     zIndex: 50,
     overflow: "visible",
   },
   pill: {
-    minWidth: 48,
-    minHeight: 48,
-    height: TAB_BAR_HEIGHT,
+    flexShrink: 1,
+    minWidth: 0,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: TAB_BAR_HEIGHT / 2,

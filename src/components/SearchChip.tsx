@@ -16,7 +16,13 @@ import { colors, spacing } from "@/theme";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export function SearchChip({ onSearch }: { onSearch: boolean }) {
+export function SearchChip({
+  onSearch,
+  width = SEARCH_CHIP_EXPANDED_WIDTH,
+}: {
+  onSearch: boolean;
+  width?: number;
+}) {
   const { openSearch } = useTabBarMotion();
   const scale = useSharedValue(1);
 
@@ -40,7 +46,17 @@ export function SearchChip({ onSearch }: { onSearch: boolean }) {
         if (onSearch) return;
         openSearch();
       }}
-      style={[styles.chip, animatedStyle]}
+      style={[
+        styles.chip,
+        {
+          width,
+          minWidth: 0,
+          flexShrink: 1,
+          paddingHorizontal:
+            width < SEARCH_CHIP_EXPANDED_WIDTH ? spacing.sm : spacing.md,
+        },
+        animatedStyle,
+      ]}
     >
       <Search
         color={colors.onPrimary}
@@ -62,7 +78,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
     borderRadius: SEARCH_CHIP_HEIGHT / 2,
     backgroundColor: colors.primary,
     shadowColor: "#000",
@@ -75,6 +90,7 @@ const styles = StyleSheet.create({
     }),
   },
   label: {
+    flexShrink: 1,
     fontSize: 13,
     fontWeight: "800",
     color: colors.onPrimary,
