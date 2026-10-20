@@ -17,6 +17,7 @@ import {
 
 import { Button } from "@/components/Button";
 import { useKeyboardInset } from "@/components/KeyboardForm";
+import { formatPlace } from "@/lib/maps";
 import { useAdminPendingEvents } from "@/lib/useAdmin";
 import { colors, radius, spacing } from "@/theme";
 import type { CampusEvent } from "@/types/database";
@@ -130,11 +131,16 @@ function PendingEventCard({
             {isScheduled ? " (Coming Soon)" : ""}
           </Text>
         ) : null}
-        {event.locationName ? (
+        {event.isOnline || event.locationName || event.locationAddress ? (
           <View style={styles.locationRow}>
             <MapPin color={colors.onSurfaceVariant} size={14} />
-            <Text style={styles.location} numberOfLines={1}>
-              {event.locationName}
+            <Text style={styles.location} numberOfLines={2}>
+              {event.isOnline
+                ? "Online event"
+                : formatPlace({
+                    name: event.locationName,
+                    address: event.locationAddress,
+                  })}
             </Text>
           </View>
         ) : null}

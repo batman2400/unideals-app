@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { Calendar, MapPin, Users } from "lucide-react-native";
+import { Calendar, Globe, Users } from "lucide-react-native";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
+import { LocationRow } from "@/components/LocationRow";
 import {
   formatEventWhen,
   formatLaunchDate,
@@ -116,11 +117,19 @@ export default function EventDetailScreen() {
             label="When"
             value={formatEventWhen(event)}
           />
-          <InfoRow
-            icon={<MapPin color={colors.primary} size={18} />}
-            label="Where"
-            value={event.locationName || "Location TBA"}
-          />
+          {event.isOnline ? (
+            <InfoRow
+              icon={<Globe color={colors.primary} size={18} />}
+              label="Where"
+              value="Online event"
+            />
+          ) : (
+            <LocationRow
+              label="Where"
+              name={event.locationName}
+              address={event.locationAddress}
+            />
+          )}
           <InfoRow
             icon={<Users color={colors.primary} size={18} />}
             label="Who can attend"

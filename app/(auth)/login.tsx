@@ -189,6 +189,7 @@ export default function LoginScreen() {
           <Image
             accessibilityLabel="Uni Deals logo"
             source={require("../../assets/logo.png")}
+            resizeMode="contain"
             style={styles.logoMark}
           />
           <Text style={styles.wordmark}>
@@ -390,8 +391,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   logoMark: {
-    width: 48,
-    height: 48,
+    width: 104,
+    height: 58,
   },
   wordmark: {
     fontSize: 30,

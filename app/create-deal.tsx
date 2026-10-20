@@ -18,6 +18,7 @@ import {
   ImagePickerField,
   type PickedImage,
 } from "@/components/ImagePickerField";
+import { LocationField } from "@/components/LocationField";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -35,6 +36,7 @@ import {
 } from "@/lib/dealForm";
 import { uploadDealImage } from "@/lib/dealImageUpload";
 import { asHttpUrl } from "@/lib/httpUrl";
+import { validateLocation } from "@/lib/maps";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import {
   PARTNER_BRAND_REQUIRED_MESSAGE,
@@ -68,6 +70,8 @@ export default function CreateDealScreen() {
   const [showStartDate, setShowStartDate] = useState(false);
   const [showEndDate, setShowEndDate] = useState(false);
   const [storeUrl, setStoreUrl] = useState("");
+  const [locationName, setLocationName] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
   const [image, setImage] = useState<PickedImage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStage, setSubmitStage] = useState("");
@@ -85,6 +89,8 @@ export default function CreateDealScreen() {
           description.trim() ||
           offerValue.trim() ||
           storeUrl.trim() ||
+          locationName.trim() ||
+          locationAddress.trim() ||
           startAt ||
           endAt ||
           image ||
@@ -99,6 +105,8 @@ export default function CreateDealScreen() {
       description,
       offerValue,
       storeUrl,
+      locationName,
+      locationAddress,
       startAt,
       endAt,
       image,
@@ -162,6 +170,18 @@ export default function CreateDealScreen() {
       }
     }
 
+    const isInStore = dealType === "In-Store";
+    const locationError = isInStore
+      ? validateLocation(
+          { name: locationName, address: locationAddress },
+          { required: true, subject: "Store" },
+        )
+      : null;
+    if (locationError) {
+      setError(locationError);
+      return;
+    }
+
     const scheduleError = validateSchedule(startAt, endAt);
     if (scheduleError) {
       setError(scheduleError);
@@ -198,6 +218,12 @@ export default function CreateDealScreen() {
         partner_id: user.id,
         status: "approved",
         store_url: storeUrlValue,
+        ...(isInStore
+          ? {
+              location_name: locationName.trim(),
+              location_address: locationAddress.trim(),
+            }
+          : {}),
         start_time: startIso,
         end_time: endIso,
         show_start_date: showStartDate,
@@ -248,6 +274,8 @@ export default function CreateDealScreen() {
     offerPreview,
     image,
     storeUrl,
+    locationName,
+    locationAddress,
     startAt,
     endAt,
     dealType,
@@ -348,7 +376,18 @@ export default function CreateDealScreen() {
             keyboardType="url"
             hint="Students can open this after revealing the promo code."
           />
-        ) : null}
+        ) : (
+          <LocationField
+            required
+            nameLabel="Store name / branch"
+            namePlaceholder="e.g. Cargills Food City, Bambalapitiya"
+            name={locationName}
+            address={locationAddress}
+            onChangeName={setLocationName}
+            onChangeAddress={setLocationAddress}
+            hint="Where students redeem this deal. They can tap it to open Maps."
+          />
+        )}
         {offerPreview ? (
           <View style={styles.previewPill}>
             <Text style={styles.previewLabel}>Offer preview</Text>

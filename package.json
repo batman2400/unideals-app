@@ -12,9 +12,7 @@
     "typecheck": "tsc --noEmit",
     "build:dev:android": "eas build --profile development --platform android",
     "build:preview:android": "eas build --profile preview --platform android",
-    "build:production": "eas build --profile production --platform all",
-    "update:preview": "eas update --channel preview --environment preview",
-    "update:production": "eas update --channel production --environment production"
+    "build:production": "eas build --profile production --platform all"
   },
   "dependencies": {
     "@noble/hashes": "^2.3.0",

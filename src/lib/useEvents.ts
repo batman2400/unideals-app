@@ -163,6 +163,7 @@ export function filterEvents(
       event.universityName,
       event.clubName,
       event.locationName,
+      event.locationAddress,
     ].some((field) => field?.toLowerCase().includes(normalized)),
   );
 }

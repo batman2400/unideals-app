@@ -266,7 +266,13 @@ export function filterDeals(deals: Deal[], query: string): Deal[] {
   if (!normalized) return deals;
 
   return deals.filter((deal) =>
-    [deal.title, deal.brand, deal.category].some((field) =>
+    [
+      deal.title,
+      deal.brand,
+      deal.category,
+      deal.locationName,
+      deal.locationAddress,
+    ].some((field) =>
       field?.toLowerCase().includes(normalized),
     ),
   );

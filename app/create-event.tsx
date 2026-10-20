@@ -2,7 +2,9 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Pressable,
   StyleSheet,
+  Switch,
   Text,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,11 +17,13 @@ import {
   ImagePickerField,
   type PickedImage,
 } from "@/components/ImagePickerField";
+import { LocationField } from "@/components/LocationField";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/context/AuthContext";
 import { validateSchedule } from "@/lib/dealForm";
 import { uploadEventImage } from "@/lib/eventImageUpload";
 import { asHttpUrl } from "@/lib/httpUrl";
+import { validateLocation } from "@/lib/maps";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
 import { colors, spacing } from "@/theme";
@@ -41,6 +45,8 @@ export default function CreateEventScreen() {
   const [universityName, setUniversityName] = useState("");
   const [clubName, setClubName] = useState("");
   const [locationName, setLocationName] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
+  const [isOnline, setIsOnline] = useState(false);
   const [targetAudience, setTargetAudience] =
     useState<EventAudience>("all_students");
   const [externalRegistrationUrl, setExternalRegistrationUrl] = useState("");
@@ -60,11 +66,13 @@ export default function CreateEventScreen() {
           universityName.trim() ||
           clubName.trim() ||
           locationName.trim() ||
+          locationAddress.trim() ||
           externalRegistrationUrl.trim() ||
           startAt ||
           endAt ||
           publishAt ||
           image ||
+          isOnline ||
           category !== "social" ||
           targetAudience !== "all_students",
       ),
@@ -74,6 +82,8 @@ export default function CreateEventScreen() {
       universityName,
       clubName,
       locationName,
+      locationAddress,
+      isOnline,
       externalRegistrationUrl,
       startAt,
       endAt,
@@ -105,6 +115,15 @@ export default function CreateEventScreen() {
     }
     if (!startAt) {
       setError("Start date and time are required.");
+      return;
+    }
+
+    const locationError = validateLocation(
+      { name: locationName, address: locationAddress },
+      { required: !isOnline, requireAddress: false, subject: "Venue" },
+    );
+    if (locationError) {
+      setError(locationError);
       return;
     }
 
@@ -162,7 +181,9 @@ export default function CreateEventScreen() {
         p_start_time: startAt.toISOString(),
         p_end_time: endAt ? endAt.toISOString() : null,
         p_publish_at: (publishAt ?? new Date()).toISOString(),
-        p_location_name: locationName.trim() || null,
+        p_location_name: isOnline ? null : locationName.trim() || null,
+        p_location_address: isOnline ? null : locationAddress.trim() || null,
+        p_is_online: isOnline,
         p_category: category,
         p_university_name: universityName.trim() || null,
         p_club_name: clubName.trim() || null,
@@ -185,6 +206,8 @@ export default function CreateEventScreen() {
             end_time: rpcArgs.p_end_time,
             publish_at: rpcArgs.p_publish_at,
             location_name: rpcArgs.p_location_name,
+            location_address: rpcArgs.p_location_address,
+            is_online: rpcArgs.p_is_online,
             category: rpcArgs.p_category,
             university_name: rpcArgs.p_university_name,
             club_name: rpcArgs.p_club_name,
@@ -229,6 +252,8 @@ export default function CreateEventScreen() {
     category,
     clubName,
     locationName,
+    locationAddress,
+    isOnline,
     targetAudience,
     externalRegistrationUrl,
     allowLeave,
@@ -296,12 +321,40 @@ export default function CreateEventScreen() {
           hint="Leave empty to publish when approved. A future date shows the event as Coming Soon until then."
         />
 
-        <FormField
-          label="Location"
-          value={locationName}
-          onChangeText={setLocationName}
-          placeholder="e.g. Main Auditorium"
-        />
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: isOnline }}
+          onPress={() => setIsOnline((current) => !current)}
+          style={styles.toggleRow}
+        >
+          <Text style={styles.toggleLabel}>
+            This is an online event (no physical venue)
+          </Text>
+          <Switch
+            value={isOnline}
+            onValueChange={setIsOnline}
+            trackColor={{
+              false: colors.outlineVariant,
+              true: colors.primaryContainer,
+            }}
+            thumbColor={isOnline ? colors.primary : colors.surfaceContainerHighest}
+          />
+        </Pressable>
+
+        {!isOnline ? (
+          <LocationField
+            required
+            addressRequired={false}
+            nameLabel="Venue"
+            namePlaceholder="e.g. Main Auditorium"
+            name={locationName}
+            address={locationAddress}
+            onChangeName={setLocationName}
+            onChangeAddress={setLocationAddress}
+            addressPlaceholder="e.g. University of Colombo, Reid Ave, Colombo 7"
+            hint="Recommended. Attendees can tap it to open Maps, so include the campus or street."
+          />
+        ) : null}
 
         <Select
           label="Target Audience"
@@ -353,6 +406,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: colors.onSurfaceVariant,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  toggleLabel: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.onSurface,
   },
   error: {
     fontSize: 13,

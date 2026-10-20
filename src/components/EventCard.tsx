@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { Calendar, MapPin } from "lucide-react-native";
+import { Calendar, Globe, MapPin } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -61,11 +61,18 @@ export function EventCard({ event, onPress }: EventCardProps) {
         <Text style={styles.title} numberOfLines={2}>
           {event.title}
         </Text>
-        {event.locationName ? (
+        {event.isOnline ? (
+          <View style={styles.metaRow}>
+            <Globe color={colors.onSurfaceVariant} size={14} />
+            <Text style={styles.metaText} numberOfLines={1}>
+              Online event
+            </Text>
+          </View>
+        ) : event.locationName || event.locationAddress ? (
           <View style={styles.metaRow}>
             <MapPin color={colors.onSurfaceVariant} size={14} />
             <Text style={styles.metaText} numberOfLines={1}>
-              {event.locationName}
+              {event.locationName ?? event.locationAddress}
             </Text>
           </View>
         ) : null}

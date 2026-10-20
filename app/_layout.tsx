@@ -10,11 +10,11 @@ import {
   initialWindowMetrics,
 } from "react-native-safe-area-context";
 
+import { AppUpdateGate, useSplashReleased } from "@/components/AppUpdateGate";
 import { ConfigMissingScreen } from "@/components/ConfigMissingScreen";
 import { SearchMorph } from "@/components/SearchMorph";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { TabBarMotionProvider } from "@/context/TabBarMotionContext";
-import { applyExpoUpdateIfAvailable } from "@/lib/applyExpoUpdate";
 import { handleAuthDeepLink } from "@/lib/authDeepLink";
 import {
   consumeInitialPushTarget,
@@ -26,7 +26,6 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 import { colors } from "@/theme";
 
 void SplashScreen.preventAutoHideAsync();
-void applyExpoUpdateIfAvailable();
 
 /** Avoid re-processing the launch URL on Fast Refresh / guard remounts. */
 let didConsumeInitialAuthUrl = false;
@@ -39,6 +38,7 @@ function NavigationGuard() {
     isPasswordRecovery,
     role,
   } = useAuth();
+  const splashReleased = useSplashReleased();
   const router = useRouter();
 
   const stackHeader = {
@@ -90,16 +90,16 @@ function NavigationGuard() {
   }, [beginPasswordRecovery, router]);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && splashReleased) {
       void SplashScreen.hideAsync().catch(() => {});
     }
-  }, [isLoading]);
+  }, [isLoading, splashReleased]);
 
-  // Safety fallback so splash screen never hangs permanently
+  // Safety fallback so the splash screen never hangs permanently.
   useEffect(() => {
     const timer = setTimeout(() => {
       void SplashScreen.hideAsync().catch(() => {});
-    }, 3000);
+    }, 8000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -336,15 +336,17 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-        <AuthProvider>
-          <TabBarMotionProvider>
-            <StatusBar style="dark" />
-            <View style={styles.root}>
-              <NavigationGuard />
-              <SearchMorph />
-            </View>
-          </TabBarMotionProvider>
-        </AuthProvider>
+        <AppUpdateGate>
+          <AuthProvider>
+            <TabBarMotionProvider>
+              <StatusBar style="dark" />
+              <View style={styles.root}>
+                <NavigationGuard />
+                <SearchMorph />
+              </View>
+            </TabBarMotionProvider>
+          </AuthProvider>
+        </AppUpdateGate>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

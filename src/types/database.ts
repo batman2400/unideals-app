@@ -6,7 +6,8 @@
  * `supabase_partner_access.sql`, `supabase_portal_redesign.sql`,
  * `supabase_deal_auto_launch.sql`, `supabase_student_verification.sql`,
  * `supabase_yearly_student_verification.sql`,
- * `supabase_push_notifications.sql`).
+ * `supabase_push_notifications.sql`,
+ * `supabase_app_update_policy.sql`, `supabase_location_support.sql`).
  */
 
 export type UserRole = "student" | "partner" | "admin";
@@ -24,6 +25,16 @@ export type DealType = "Online" | "In-Store";
 
 /** `public.deals.status` */
 export type DealStatus = "pending" | "approved" | "rejected" | "paused";
+
+/**
+ * Single row of `public.app_update_policy`.
+ * `min_store_version` sends older store builds to the store.
+ * Releases ship as a new store build, not an over-the-air bundle.
+ */
+export interface AppUpdatePolicyRow {
+  min_store_version: string | null;
+  force_ota: boolean;
+}
 
 /** Row shape of `public.push_tokens`. */
 export interface PushTokenRow {
@@ -72,6 +83,9 @@ export interface PublicDealRow {
   show_start_date?: boolean | null;
   show_end_date?: boolean | null;
   is_coming_soon?: boolean | null;
+  /** Store / branch where an In-Store deal can be redeemed. */
+  location_name?: string | null;
+  location_address?: string | null;
 }
 
 /** Camel-cased deal used across the mobile UI. */
@@ -92,6 +106,8 @@ export interface Deal {
   showStartDate: boolean;
   showEndDate: boolean;
   isComingSoon: boolean;
+  locationName: string | null;
+  locationAddress: string | null;
 }
 
 export function mapDeal(row: PublicDealRow): Deal {
@@ -116,6 +132,8 @@ export function mapDeal(row: PublicDealRow): Deal {
       (row.start_time != null &&
         !Number.isNaN(new Date(row.start_time).getTime()) &&
         new Date(row.start_time).getTime() > Date.now()),
+    locationName: row.location_name?.trim() || null,
+    locationAddress: row.location_address?.trim() || null,
   };
 }
 
@@ -229,6 +247,8 @@ export interface EventRow {
   start_time: string;
   end_time: string | null;
   location_name: string | null;
+  location_address?: string | null;
+  is_online?: boolean | null;
   category: string | null;
   cover_image_url: string | null;
   rsvp_count: number | null;
@@ -251,6 +271,8 @@ export interface CampusEvent {
   startTime: string;
   endTime: string | null;
   locationName: string | null;
+  locationAddress: string | null;
+  isOnline: boolean;
   category: string | null;
   coverImageUrl: string | null;
   rsvpCount: number;
@@ -273,6 +295,8 @@ export function mapEvent(row: EventRow): CampusEvent {
     startTime: row.start_time,
     endTime: row.end_time,
     locationName: row.location_name,
+    locationAddress: row.location_address?.trim() || null,
+    isOnline: row.is_online === true,
     category: row.category,
     coverImageUrl: row.cover_image_url,
     rsvpCount: row.rsvp_count ?? 0,

@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { Clock, Heart, Store, Tag } from "lucide-react-native";
+import { Clock, Heart, MapPin, Store, Tag } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -151,6 +151,14 @@ export function DealCard({
           {deal.title}
         </Text>
         <Text style={styles.discount}>{deal.discount}</Text>
+        {isInStore && (deal.locationName || deal.locationAddress) ? (
+          <View style={styles.locationRow}>
+            <MapPin color={colors.onSurfaceVariant} size={13} />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {deal.locationName ?? deal.locationAddress}
+            </Text>
+          </View>
+        ) : null}
         {launchLabel ? (
           <Text style={styles.launchLabel}>{launchLabel}</Text>
         ) : scheduleLabel ? (
@@ -277,6 +285,17 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.4,
     color: colors.primary,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  locationText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.onSurfaceVariant,
   },
   launchLabel: {
     fontSize: 12,

@@ -19,6 +19,7 @@ import {
   ImagePickerField,
   type PickedImage,
 } from "@/components/ImagePickerField";
+import { LocationField } from "@/components/LocationField";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -37,6 +38,7 @@ import {
 } from "@/lib/dealForm";
 import { uploadDealImage } from "@/lib/dealImageUpload";
 import { asHttpUrl } from "@/lib/httpUrl";
+import { validateLocation } from "@/lib/maps";
 import { asRouteId } from "@/lib/routeParams";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import {
@@ -89,6 +91,8 @@ export default function EditDealScreen() {
   const [startAt, setStartAt] = useState<Date | null>(null);
   const [endAt, setEndAt] = useState<Date | null>(null);
   const [storeUrl, setStoreUrl] = useState("");
+  const [locationName, setLocationName] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
   const [showStartDate, setShowStartDate] = useState(false);
   const [showEndDate, setShowEndDate] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,6 +117,8 @@ export default function EditDealScreen() {
         offerValue,
         redemptionCode,
         storeUrl,
+        locationName,
+        locationAddress,
         startAt: startAt?.getTime() ?? null,
         endAt: endAt?.getTime() ?? null,
         showStartDate,
@@ -128,6 +134,8 @@ export default function EditDealScreen() {
       offerValue,
       redemptionCode,
       storeUrl,
+      locationName,
+      locationAddress,
       startAt,
       endAt,
       showStartDate,
@@ -163,7 +171,7 @@ export default function EditDealScreen() {
       let query = supabase
         .from("deals")
         .select(
-          "id, title, brand, discount, type, category, image_url, description, redemption_code, store_url, start_time, end_time, show_start_date, show_end_date",
+          "id, title, brand, discount, type, category, image_url, description, redemption_code, store_url, location_name, location_address, start_time, end_time, show_start_date, show_end_date",
         )
         .eq("id", dealId);
 
@@ -196,6 +204,8 @@ export default function EditDealScreen() {
       const nextType = asDealType(data.type as string | null);
       const nextCode = String(data.redemption_code ?? "").toUpperCase();
       const nextStoreUrl = String(data.store_url ?? "");
+      const nextLocationName = String(data.location_name ?? "");
+      const nextLocationAddress = String(data.location_address ?? "");
       const nextShowStart = Boolean(data.show_start_date);
       const nextShowEnd = Boolean(data.show_end_date);
 
@@ -208,6 +218,8 @@ export default function EditDealScreen() {
       setRedemptionCode(nextCode);
       setImageUrl(String(data.image_url ?? ""));
       setStoreUrl(nextStoreUrl);
+      setLocationName(nextLocationName);
+      setLocationAddress(nextLocationAddress);
       setStartAt(start);
       setEndAt(end);
       setShowStartDate(nextShowStart);
@@ -221,6 +233,8 @@ export default function EditDealScreen() {
         offerValue: parsed.offerValue,
         redemptionCode: nextCode,
         storeUrl: nextStoreUrl,
+        locationName: nextLocationName,
+        locationAddress: nextLocationAddress,
         startAt: start?.getTime() ?? null,
         endAt: end?.getTime() ?? null,
         showStartDate: nextShowStart,
@@ -285,6 +299,18 @@ export default function EditDealScreen() {
       }
     }
 
+    const isInStore = dealType === "In-Store";
+    const locationError = isInStore
+      ? validateLocation(
+          { name: locationName, address: locationAddress },
+          { required: true, subject: "Store" },
+        )
+      : null;
+    if (locationError) {
+      setError(locationError);
+      return;
+    }
+
     const scheduleError = validateSchedule(startAt, endAt);
     if (scheduleError) {
       setError(scheduleError);
@@ -322,6 +348,8 @@ export default function EditDealScreen() {
           description.trim() || `${title.trim()} student offer.`,
         redemption_code: redemptionCode.trim().toUpperCase(),
         store_url: storeUrlValue,
+        location_name: isInStore ? locationName.trim() : null,
+        location_address: isInStore ? locationAddress.trim() : null,
         start_time: startIso,
         end_time: endIso,
         show_start_date: showStartDate,
@@ -381,6 +409,8 @@ export default function EditDealScreen() {
     image,
     imageUrl,
     storeUrl,
+    locationName,
+    locationAddress,
     startAt,
     endAt,
     dealType,
@@ -468,7 +498,18 @@ export default function EditDealScreen() {
             keyboardType="url"
             hint="Students can open this after revealing the promo code."
           />
-        ) : null}
+        ) : (
+          <LocationField
+            required
+            nameLabel="Store name / branch"
+            namePlaceholder="e.g. Cargills Food City, Bambalapitiya"
+            name={locationName}
+            address={locationAddress}
+            onChangeName={setLocationName}
+            onChangeAddress={setLocationAddress}
+            hint="Where students redeem this deal. They can tap it to open Maps."
+          />
+        )}
         <Select
           label="Category"
           value={category}

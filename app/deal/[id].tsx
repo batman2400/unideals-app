@@ -23,6 +23,7 @@ import QRCode from "react-native-qrcode-svg";
 
 import { Button } from "@/components/Button";
 import { SaveDealButton } from "@/components/DealCard";
+import { LocationRow } from "@/components/LocationRow";
 import { useAuth } from "@/context/AuthContext";
 import {
   formatDealVisibleSchedule,
@@ -155,6 +156,15 @@ export default function DealDetailScreen() {
         ) : null}
         {scheduleLabel ? (
           <Text style={styles.scheduleLabel}>{scheduleLabel}</Text>
+        ) : null}
+
+        {deal.type === "In-Store" &&
+        (deal.locationName || deal.locationAddress) ? (
+          <LocationRow
+            label="Redeem at"
+            name={deal.locationName}
+            address={deal.locationAddress}
+          />
         ) : null}
 
         {isExpiredDeal(deal) ? (
