@@ -18,10 +18,9 @@ import { supabase } from "@/lib/supabase";
 const TOKEN_CACHE_KEY = "unideals.push-token";
 export const PUSH_CHANNEL_ID = "deals-events";
 
-export interface PushTarget {
-  type: "deal" | "event";
-  id: string;
-}
+export type PushTarget =
+  | { type: "deal" | "event"; id: string }
+  | { type: "verification" | "brand_application" };
 
 type NotificationsModule = typeof import("expo-notifications");
 
@@ -246,6 +245,9 @@ export function targetFromPushData(
       : typeof rawId === "string"
         ? rawId
         : "";
+  if (type === "verification" || type === "brand_application") {
+    return { type };
+  }
   if (!id) return null;
   if (type === "deal" || type === "event") {
     return { type, id };

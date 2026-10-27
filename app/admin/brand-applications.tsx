@@ -38,9 +38,6 @@ function ReviewCard({
   onReject: () => void;
 }) {
   const lines = [
-    item.kind === "profile" && item.pendingName
-      ? `Requested name: ${item.pendingName}`
-      : null,
     detailLine("Category", item.category),
     detailLine("Contact", item.contactName),
     detailLine("Phone", item.contactPhone),
@@ -51,10 +48,7 @@ function ReviewCard({
     detailLine("About", item.description),
   ].filter((line): line is string => Boolean(line));
 
-  const preview =
-    item.kind === "profile"
-      ? (item.pendingLogoUrl ?? item.logoUrl)
-      : item.logoUrl;
+  const preview = item.logoUrl;
 
   return (
     <View style={styles.card}>
@@ -66,7 +60,7 @@ function ReviewCard({
         )}
         <View style={styles.cardTitleWrap}>
           <Text style={styles.kind}>
-            {item.kind === "application" ? "New application" : "Name or logo change"}
+            New application
           </Text>
           <Text style={styles.name}>{item.name}</Text>
         </View>
@@ -141,8 +135,7 @@ export default function AdminBrandApplicationsScreen() {
           <View style={styles.header}>
             <Text style={styles.lead}>
               Approving an application promotes that student to a partner for
-              the brand. Rejected applicants can edit and resubmit. Name and
-              logo changes stay off the public catalogue until you approve them.
+              the brand. Rejected applicants can edit and resubmit.
             </Text>
             {unavailable ? (
               <Text style={styles.banner}>

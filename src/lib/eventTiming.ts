@@ -11,7 +11,10 @@ export function isComingSoonDeal(deal: Deal): boolean {
   return !Number.isNaN(t.getTime()) && t.getTime() > Date.now();
 }
 
-export function isExpiredDeal(deal: Pick<Deal, "endTime">): boolean {
+export function isExpiredDeal(
+  deal: Pick<Deal, "endTime"> & { isExpired?: boolean },
+): boolean {
+  if (deal.isExpired) return true;
   if (!deal.endTime) return false;
   const t = new Date(deal.endTime);
   return !Number.isNaN(t.getTime()) && t.getTime() < Date.now();

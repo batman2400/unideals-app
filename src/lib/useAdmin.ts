@@ -8,7 +8,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { supabase, toErrorMessage } from "@/lib/supabase";
-import { notifyVerificationRejected } from "@/lib/verificationDocuments";
 import type {
   AdminDeal,
   AdminDealRow,
@@ -364,8 +363,6 @@ export function useAdminVerifications(): UseAdminVerificationsResult {
         setError(msg);
         return msg;
       }
-      await notifyVerificationRejected(id);
-      if (!activeRef.current) return null;
       setActingId(null);
       setVerifications((prev) => prev.filter((v) => v.id !== id));
       setMessage("Student verification rejected.");

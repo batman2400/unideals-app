@@ -2,9 +2,12 @@
  * useDeals / useDeal
  *
  * Port of the web app's `src/lib/useDeals.js`.
- * - List: `get_public_deals()` (never returns redemption_code)
- * - Ended offers are dropped from student lists; partners/admins see them
- *   under Finished in their portals.
+ * - List: `get_public_deals()` (never returns redemption_code).
+ *   That RPC only returns approved deals that have not ended, so store
+ *   builds match the website even when they do not filter locally.
+ * - Ended offers are also dropped on the client via `is_expired`, because
+ *   the RPC hides `end_time` when the partner turns off the end date.
+ *   Partners/admins still see finished deals in their portals.
  * - Detail: `get_public_deal_by_id()` (partners/admins may still receive
  *   `redemption_code`; students should call `reveal_online_deal_code`)
  */

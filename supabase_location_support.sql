@@ -86,6 +86,7 @@ AS $$
     d.location_address
   FROM public.deals d
   WHERE d.status = 'approved'
+    AND (d.end_time IS NULL OR d.end_time >= now())
   ORDER BY d.created_at DESC;
 $$;
 

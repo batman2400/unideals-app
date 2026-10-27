@@ -12,6 +12,7 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppleSignInButton } from "@/components/AppleSignInButton";
 import { Button } from "@/components/Button";
 import { KeyboardFormScroll, requestKeyboardScroll } from "@/components/KeyboardForm";
 import {
@@ -19,6 +20,7 @@ import {
   GoogleSignInButton,
 } from "@/components/GoogleSignInButton";
 import { useAuth } from "@/context/AuthContext";
+import { isAppleSignInAvailable } from "@/lib/appleAuth";
 import {
   PASSWORD_HINT,
   validatePasswordStrength,
@@ -30,7 +32,8 @@ type Tab = "signin" | "signup";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
-  const { signIn, signUp, signInWithGoogle, resetPassword } = useAuth();
+  const { signIn, signUp, signInWithApple, signInWithGoogle, resetPassword } =
+    useAuth();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ error?: string }>();
 
@@ -42,14 +45,25 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [isAppleSubmitting, setIsAppleSubmitting] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const isSignUp = tab === "signup";
-  const isBusy = isSubmitting || isGoogleSubmitting;
-  // Google on iOS would require Sign in with Apple (guideline 4.8). Email
-  // and password is the iPhone path; Android and web keep Google.
-  const showGoogleSignIn = Platform.OS !== "ios";
+  const isBusy = isSubmitting || isGoogleSubmitting || isAppleSubmitting;
+  const showAppleSignIn = Platform.OS === "ios" && appleAvailable;
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    let active = true;
+    void isAppleSignInAvailable().then((available) => {
+      if (active) setAppleAvailable(available);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof params.error === "string" && params.error) {
@@ -177,6 +191,29 @@ export default function LoginScreen() {
     }
   }, [isBusy, signInWithGoogle]);
 
+  const handleAppleSignIn = useCallback(async () => {
+    if (isBusy) return;
+
+    setIsAppleSubmitting(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const result = await signInWithApple();
+      if (result.error) {
+        setError(result.error);
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Apple sign-in didn't work. Please try again.",
+      );
+    } finally {
+      setIsAppleSubmitting(false);
+    }
+  }, [isBusy, signInWithApple]);
+
   return (
     <KeyboardFormScroll
       style={styles.flex}
@@ -224,16 +261,19 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.form}>
-          {showGoogleSignIn ? (
-            <>
-              <GoogleSignInButton
-                onPress={() => void handleGoogleSignIn()}
-                loading={isGoogleSubmitting}
-                disabled={isBusy}
-              />
-              <AuthDivider />
-            </>
+          {showAppleSignIn ? (
+            <AppleSignInButton
+              onPress={() => {
+                if (!isBusy) void handleAppleSignIn();
+              }}
+            />
           ) : null}
+          <GoogleSignInButton
+            onPress={() => void handleGoogleSignIn()}
+            loading={isGoogleSubmitting}
+            disabled={isBusy}
+          />
+          <AuthDivider />
 
           {isSignUp ? (
             <>

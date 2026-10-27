@@ -1,15 +1,18 @@
 /**
  * Google OAuth for native (Expo).
  *
- * Opens the system browser. Supabase redirects back to
- * `unideals://auth/callback`, which the root layout exchanges the same way
- * as password-reset links. Avoid `expo-web-browser` here — it is a native
- * module and crashes development builds that were compiled without it.
+ * iPhone opens an in-app auth sheet and completes the session from the
+ * redirect. Android keeps the system browser, which already returns through
+ * `unideals://auth/callback`.
  */
 import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
 
-import { getOAuthRedirectUrl } from "@/lib/authDeepLink";
+import { getOAuthRedirectUrl, handleAuthDeepLink } from "@/lib/authDeepLink";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+
+WebBrowser.maybeCompleteAuthSession();
 
 function toGoogleSignInError(caught: unknown, fallback: string): string {
   const message = toErrorMessage(caught, fallback);
@@ -45,6 +48,18 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
 
     if (!data.url) {
       return { error: "Google sign-in didn't start. Please try again." };
+    }
+
+    if (Platform.OS === "ios") {
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type === "cancel" || result.type === "dismiss") {
+        return { error: null };
+      }
+      if (result.type !== "success") {
+        return { error: "Google sign-in didn't work. Please try again." };
+      }
+      const exchanged = await handleAuthDeepLink(result.url);
+      return { error: exchanged.error };
     }
 
     await Linking.openURL(data.url);

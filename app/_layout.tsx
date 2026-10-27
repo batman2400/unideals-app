@@ -115,9 +115,19 @@ function NavigationGuard() {
     const openTarget = (target: PushTarget) => {
       if (target.type === "deal") {
         router.push(`/deal/${target.id}` as Href);
-      } else {
-        router.push(`/event/${target.id}` as Href);
+        return;
       }
+      if (target.type === "event") {
+        router.push(`/event/${target.id}` as Href);
+        return;
+      }
+      if (target.type === "verification") {
+        router.push("/(tabs)/profile" as Href);
+        return;
+      }
+      router.push(
+        (role === "partner" ? "/(tabs)/profile" : "/become-partner") as Href,
+      );
     };
 
     let cancelled = false;
@@ -130,7 +140,7 @@ function NavigationGuard() {
       cancelled = true;
       stopResponses();
     };
-  }, [isAuthenticated, isLoading, isPasswordRecovery, router]);
+  }, [isAuthenticated, isLoading, isPasswordRecovery, role, router]);
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: styles.content }}>

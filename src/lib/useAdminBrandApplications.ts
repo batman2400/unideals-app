@@ -1,12 +1,12 @@
 /**
- * Admin queue for new brand applications and held name/logo changes.
+ * Admin queue for new brand applications.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { applicationsSchemaMissing } from "@/lib/useBrandApplication";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 
-export type BrandReviewKind = "application" | "profile";
+export type BrandReviewKind = "application";
 
 export interface BrandReviewItem {
   id: string;
@@ -83,14 +83,8 @@ function toItems(row: ReviewRow): BrandReviewItem[] {
     location: row.location,
     submittedAt: row.submitted_at ?? row.updated_at,
   };
-  const items: BrandReviewItem[] = [];
-  if (row.status === "pending") {
-    items.push({ ...shared, kind: "application" });
-  }
-  if (row.profile_review_status === "pending") {
-    items.push({ ...shared, kind: "profile" });
-  }
-  return items;
+  if (row.status !== "pending") return [];
+  return [{ ...shared, kind: "application" }];
 }
 
 export interface UseAdminBrandApplicationsResult {
@@ -122,7 +116,7 @@ export function useAdminBrandApplications(): UseAdminBrandApplicationsResult {
     const { data, error: fetchError } = await supabase
       .from("brands")
       .select(REVIEW_SELECT)
-      .or("status.eq.pending,profile_review_status.eq.pending")
+      .eq("status", "pending")
       .order("submitted_at", { ascending: false });
 
     if (!activeRef.current) return;
@@ -169,13 +163,9 @@ export function useAdminBrandApplications(): UseAdminBrandApplicationsResult {
       setError(null);
 
       const functionName =
-        item.kind === "application"
-          ? decision === "approve"
-            ? "approve_brand_application"
-            : "reject_brand_application"
-          : decision === "approve"
-            ? "approve_brand_profile_change"
-            : "reject_brand_profile_change";
+        decision === "approve"
+          ? "approve_brand_application"
+          : "reject_brand_application";
 
       const args =
         decision === "approve"

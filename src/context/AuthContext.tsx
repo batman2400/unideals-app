@@ -39,6 +39,7 @@ import {
   getOAuthRedirectUrl,
   getPasswordResetRedirectUrl,
 } from "@/lib/authDeepLink";
+import { signInWithApple as startAppleSignIn } from "@/lib/appleAuth";
 import { signInWithGoogle as startGoogleSignIn } from "@/lib/googleAuth";
 import {
   clearCachedUserRole,
@@ -119,6 +120,7 @@ export interface AuthContextValue {
     password: string,
     details: SignUpDetails,
   ) => Promise<AuthResult>;
+  signInWithApple: () => Promise<AuthResult>;
   signInWithGoogle: () => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
@@ -499,6 +501,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const signInWithApple = useCallback(async (): Promise<AuthResult> => {
+    return startAppleSignIn();
+  }, []);
+
   const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
     return startGoogleSignIn();
   }, []);
@@ -570,6 +576,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       metadata: (user?.user_metadata ?? {}) as UserMetadata,
       signIn,
       signUp,
+      signInWithApple,
       signInWithGoogle,
       signOut,
       resetPassword,
@@ -591,6 +598,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       signIn,
       signUp,
+      signInWithApple,
       signInWithGoogle,
       signOut,
       resetPassword,

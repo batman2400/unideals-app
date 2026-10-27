@@ -50,7 +50,6 @@ export interface UsePartnerBrandProfileResult {
 
 export interface BrandSaveResult {
   error: string | null;
-  reviewHeld: boolean;
 }
 
 interface PartnerProfileJoinRow {
@@ -161,7 +160,7 @@ export function usePartnerBrandProfile(
       const validationError = validateBrandProfile(input);
       if (validationError) {
         setError(validationError);
-        return { error: validationError, reviewHeld: false };
+        return { error: validationError };
       }
 
       setSaving(true);
@@ -192,7 +191,7 @@ export function usePartnerBrandProfile(
           .eq("id", id)
           .select(BRAND_SELECT);
 
-        if (!activeRef.current) return { error: null, reviewHeld: false };
+        if (!activeRef.current) return { error: null };
 
         if (updateError) {
           const msg = isDuplicateBrandName(updateError)
@@ -200,7 +199,7 @@ export function usePartnerBrandProfile(
             : toErrorMessage(updateError, "Failed to save brand profile.");
           setError(msg);
           setSaving(false);
-          return { error: msg, reviewHeld: false };
+          return { error: msg };
         }
 
         // An empty result with no error means row-level security rejected the
@@ -210,26 +209,23 @@ export function usePartnerBrandProfile(
             "You don't have permission to edit this brand, or it no longer exists.";
           setError(msg);
           setSaving(false);
-          return { error: msg, reviewHeld: false };
+          return { error: msg };
         }
 
         const updated = mapBrand(data[0] as BrandRow);
-        const reviewHeld =
-          updated.name !== input.name.trim() ||
-          (updated.logoUrl ?? null) !== (logoUrl ?? null);
         setBrands((prev) =>
           prev.map((brand) => (brand.id === id ? updated : brand)),
         );
         setSaving(false);
-        return { error: null, reviewHeld };
+        return { error: null };
       } catch (caught) {
-        if (!activeRef.current) return { error: null, reviewHeld: false };
+        if (!activeRef.current) return { error: null };
         const msg = isDuplicateBrandName(caught)
           ? "That brand name is already taken. Please choose another."
           : toErrorMessage(caught, "Failed to save brand profile.");
         setError(msg);
         setSaving(false);
-        return { error: msg, reviewHeld: false };
+        return { error: msg };
       }
     },
     [],

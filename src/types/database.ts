@@ -83,6 +83,11 @@ export interface PublicDealRow {
   show_start_date?: boolean | null;
   show_end_date?: boolean | null;
   is_coming_soon?: boolean | null;
+  /**
+   * True when the real end time has passed. `end_time` is null when the
+   * partner hides the end date, so this flag is the expiry signal.
+   */
+  is_expired?: boolean | null;
   /** Store / branch where an In-Store deal can be redeemed. */
   location_name?: string | null;
   location_address?: string | null;
@@ -106,6 +111,7 @@ export interface Deal {
   showStartDate: boolean;
   showEndDate: boolean;
   isComingSoon: boolean;
+  isExpired: boolean;
   locationName: string | null;
   locationAddress: string | null;
 }
@@ -132,6 +138,11 @@ export function mapDeal(row: PublicDealRow): Deal {
       (row.start_time != null &&
         !Number.isNaN(new Date(row.start_time).getTime()) &&
         new Date(row.start_time).getTime() > Date.now()),
+    isExpired:
+      row.is_expired === true ||
+      (row.end_time != null &&
+        !Number.isNaN(new Date(row.end_time).getTime()) &&
+        new Date(row.end_time).getTime() < Date.now()),
     locationName: row.location_name?.trim() || null,
     locationAddress: row.location_address?.trim() || null,
   };

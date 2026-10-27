@@ -1,4 +1,3 @@
-import { supabase } from "@/lib/supabase";
 import { uploadLocalFile } from "@/lib/uploadLocalFile";
 
 const PROOF_BUCKET = "verification-documents";
@@ -58,13 +57,4 @@ export async function uploadVerificationImage(input: {
     errorMessage: "Could not upload that ID photo.",
   });
   return filePath;
-}
-
-export async function notifyVerificationRejected(requestId: string): Promise<void> {
-  const { error } = await supabase.functions.invoke("send-verification-rejected", {
-    body: { request_id: requestId },
-  });
-  if (error) {
-    console.error("Could not send verification reject email:", error);
-  }
 }

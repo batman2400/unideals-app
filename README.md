@@ -218,6 +218,54 @@ In [Expo credentials](https://expo.dev/accounts/uvaram2004/projects/unideals-app
 Push tokens are only issued on a **physical device** in a custom build — not
 simulators, and not Expo Go for this project.
 
+### Review emails and applicant pushes
+
+Admins get an email at `unideals.lk@gmail.com` when a manual student ID or a
+new brand application is waiting. The student or applicant gets an email and,
+when that device has a push token, an Expo push when the request is approved
+or rejected. Tapping the push opens Profile, or Become a partner if the
+account is still a student. Partners and admins are not pushed. University
+email OTP stays in the form and does not send a separate decision message.
+Approved partners save name and logo changes immediately. That database change
+is [`../unideals/supabase_brand_name_logo_immediate.sql`](../unideals/supabase_brand_name_logo_immediate.sql).
+
+The app no longer calls `send-verification-rejected`. Deploy this function
+and create the webhooks below before relying on reject emails.
+
+#### 1. Edge Function
+
+`RESEND_API_KEY` must already be set on the Supabase project's Edge Functions
+(same key as the website mail functions). Optional: `ADMIN_NOTIFY_EMAIL` if
+the admin inbox should not be `unideals.lk@gmail.com`.
+
+```bash
+supabase functions deploy notify-review-emails
+```
+
+Run [`../unideals/supabase_brand_name_logo_immediate.sql`](../unideals/supabase_brand_name_logo_immediate.sql)
+once in the SQL editor so partner name and logo edits are not held for review.
+
+#### 2. Database Webhooks
+
+Create **two** hooks. Same URL and headers as the student push hooks, with
+this function instead:
+
+`https://<YOUR-PROJECT-REF>.supabase.co/functions/v1/notify-review-emails`
+
+| Hook | Table | Events | HTTP |
+| ---- | ----- | ------ | ---- |
+| Review emails (verifications) | `public.manual_verifications` | Insert, Update | POST |
+| Review emails (brands) | `public.brands` | Insert, Update | POST |
+
+HTTP headers:
+
+- `Content-Type`: `application/json`
+- `Authorization`: `Bearer <SUPABASE_SERVICE_ROLE_KEY>`
+
+The function ignores rows that are not a new manual ID, a new brand
+application, or a decision on one of those. Name and logo edits do not send
+mail.
+
 ### Deal detail & verification
 
 - `/deal/[id]` — online code reveal (`log_online_code_event`) and in-store

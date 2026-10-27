@@ -143,7 +143,7 @@ export default function BecomePartnerScreen() {
         <Text style={styles.title}>You already have a partner account</Text>
         <Text style={styles.body}>
           Brand details are edited from your brand profile. Name and logo
-          changes are reviewed before students see them.
+          changes show to students as soon as you save them.
         </Text>
         <Button
           label="Open brand profile"

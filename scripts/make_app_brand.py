@@ -130,8 +130,10 @@ def main() -> None:
     if not SRC.exists():
         raise SystemExit(f"Missing source logo: {SRC}")
     glyph = load_glyph()
-    save_png(square_icon(glyph, 1024, 0.70), ASSETS / "icon.png")
-    save_png(square_icon(glyph, 1024, 0.60), ASSETS / "adaptive-icon.png")
+    save_png(square_icon(glyph, 1024, 0.68), ASSETS / "icon.png")
+    # Android shows only the centre of this image, so the mark is smaller
+    # here than on the iOS icon. 0.48 lands on the in-between home-screen size.
+    save_png(square_icon(glyph, 1024, 0.48), ASSETS / "adaptive-icon.png")
     save_png(glyph, ASSETS / "splash-icon.png")
     save_png(glyph, ASSETS / "logo.png")
     save_png(square_icon(glyph, 512, 0.70), PLAY / "icon-512.png")

@@ -49,7 +49,6 @@ export default function PartnerBrandScreen() {
   const [location, setLocation] = useState("");
   const [logo, setLogo] = useState<PickedImage | null>(null);
   const [success, setSuccess] = useState(false);
-  const [reviewHeld, setReviewHeld] = useState(false);
 
   const selected = useMemo(
     () => brands.find((brand) => brand.id === selectedId) ?? brands[0] ?? null,
@@ -97,7 +96,6 @@ export default function PartnerBrandScreen() {
       const next = brands.find((brand) => brand.id === id);
       if (!next) return;
       setSuccess(false);
-      setReviewHeld(false);
       applyBrand(next);
     },
     [applyBrand, brands],
@@ -106,7 +104,6 @@ export default function PartnerBrandScreen() {
   const handleSave = useCallback(async () => {
     if (!selected) return;
     setSuccess(false);
-    setReviewHeld(false);
     const result = await updateBrand(selected.id, {
       name,
       category,
@@ -120,7 +117,6 @@ export default function PartnerBrandScreen() {
     });
     if (!result.error) {
       setLogo(null);
-      setReviewHeld(result.reviewHeld);
       setSuccess(true);
     }
   }, [
@@ -192,8 +188,7 @@ export default function PartnerBrandScreen() {
       >
         <Text style={styles.lead}>
           These details appear with your deals. Students see your name, logo,
-          and category on the public catalogue. Name and logo changes wait for
-          review before they replace what's live.
+          and category on the public catalogue.
         </Text>
 
         {brands.length > 1 ? (
@@ -267,9 +262,7 @@ export default function PartnerBrandScreen() {
         {success ? (
           <View style={styles.successBox}>
             <Text style={styles.successText}>
-              {reviewHeld
-                ? "Saved. Your name or logo change is waiting for review. Other details are already live."
-                : "Brand profile updated successfully."}
+              Brand profile updated successfully.
             </Text>
           </View>
         ) : null}
