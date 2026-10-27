@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BadgeCheck } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -17,6 +17,11 @@ import {
   type InquiryType,
 } from "@/lib/inquiryForm";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import {
+  REQUEST_TIMEOUT_MS,
+  tookTooLongMessage,
+  withTimeout,
+} from "@/lib/withTimeout";
 import { colors, radius, spacing } from "@/theme";
 
 export default function ContactScreen() {
@@ -38,12 +43,14 @@ export default function ContactScreen() {
     return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const inFlightRef = useRef(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const showBrandField = needsBrandName(inquiryType);
 
   const handleSubmit = useCallback(async () => {
+    if (inFlightRef.current) return;
     const validationError = validateInquiry({
       name,
       email,
@@ -56,18 +63,26 @@ export default function ContactScreen() {
       return;
     }
 
+    inFlightRef.current = true;
     setIsSubmitting(true);
     setError(null);
     try {
-      const { error: submitError } = await supabase.from("inquiries").insert([
-        {
-          name: name.trim(),
-          email: email.trim(),
-          inquiry_type: inquiryType,
-          brand_name: showBrandField ? brandName.trim() : null,
-          message: message.trim(),
-        },
-      ]);
+      const { error: submitError } = await withTimeout(
+        supabase.from("inquiries").insert([
+          {
+            name: name.trim(),
+            email: email.trim(),
+            inquiry_type: inquiryType,
+            brand_name: showBrandField ? brandName.trim() : null,
+            message: message.trim(),
+          },
+        ]),
+        REQUEST_TIMEOUT_MS,
+        tookTooLongMessage(
+          "Sending your message",
+          "the message may already have been sent.",
+        ),
+      );
       if (submitError) throw submitError;
       setIsSuccess(true);
       setMessage("");
@@ -79,6 +94,7 @@ export default function ContactScreen() {
         ),
       );
     } finally {
+      inFlightRef.current = false;
       setIsSubmitting(false);
     }
   }, [brandName, email, inquiryType, message, name, showBrandField]);

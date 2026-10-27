@@ -39,6 +39,13 @@ import { asHttpUrl } from "@/lib/httpUrl";
 import { validateLocation } from "@/lib/maps";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import {
+  IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+  IMAGE_UPLOAD_TIMEOUT_MS,
+  SAVE_TIMEOUT_MS,
+  tookTooLongMessage,
+  withTimeout,
+} from "@/lib/withTimeout";
+import {
   PARTNER_BRAND_REQUIRED_MESSAGE,
   usePartnerBrand,
 } from "@/lib/usePartnerBrand";
@@ -196,13 +203,17 @@ export default function CreateDealScreen() {
 
     try {
       setSubmitStage("Uploading image…");
-      const { publicUrl } = await uploadDealImage({
-        uri: image.uri,
-        userId: user.id,
-        brandName,
-        mimeType: image.mimeType,
-        fileSize: image.fileSize,
-      });
+      const { publicUrl } = await withTimeout(
+        uploadDealImage({
+          uri: image.uri,
+          userId: user.id,
+          brandName,
+          mimeType: image.mimeType,
+          fileSize: image.fileSize,
+        }),
+        IMAGE_UPLOAD_TIMEOUT_MS,
+        IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+      );
 
       const payload = {
         title: title.trim(),
@@ -231,9 +242,14 @@ export default function CreateDealScreen() {
       };
 
       setSubmitStage("Saving deal…");
-      const { error: insertError } = await supabase
-        .from("deals")
-        .insert([payload]);
+      const { error: insertError } = await withTimeout(
+        supabase.from("deals").insert([payload]),
+        SAVE_TIMEOUT_MS,
+        tookTooLongMessage(
+          "Saving the deal",
+          "the deal may already have been saved.",
+        ),
+      );
 
       if (insertError) throw insertError;
 

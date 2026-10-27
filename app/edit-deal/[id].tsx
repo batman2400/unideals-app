@@ -42,6 +42,13 @@ import { validateLocation } from "@/lib/maps";
 import { asRouteId } from "@/lib/routeParams";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import {
+  IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+  IMAGE_UPLOAD_TIMEOUT_MS,
+  SAVE_TIMEOUT_MS,
+  tookTooLongMessage,
+  withTimeout,
+} from "@/lib/withTimeout";
+import {
   PARTNER_BRAND_REQUIRED_MESSAGE,
   usePartnerBrand,
 } from "@/lib/usePartnerBrand";
@@ -326,13 +333,17 @@ export default function EditDealScreen() {
     try {
       let effectiveImageUrl = imageUrl.trim();
       if (image) {
-        const uploaded = await uploadDealImage({
-          uri: image.uri,
-          userId: user.id,
-          brandName,
-          mimeType: image.mimeType,
-          fileSize: image.fileSize,
-        });
+        const uploaded = await withTimeout(
+          uploadDealImage({
+            uri: image.uri,
+            userId: user.id,
+            brandName,
+            mimeType: image.mimeType,
+            fileSize: image.fileSize,
+          }),
+          IMAGE_UPLOAD_TIMEOUT_MS,
+          IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+        );
         effectiveImageUrl = uploaded.publicUrl;
       }
 
@@ -365,9 +376,14 @@ export default function EditDealScreen() {
         ? updateQuery.or(`brand_id.eq.${brandId},partner_id.eq.${user.id}`)
         : updateQuery.eq("partner_id", user.id);
 
-      const { data, error: updateError } = await updateQuery
-        .select("id")
-        .maybeSingle();
+      const { data, error: updateError } = await withTimeout(
+        updateQuery.select("id").maybeSingle(),
+        SAVE_TIMEOUT_MS,
+        tookTooLongMessage(
+          "Saving the offer",
+          "the changes may already have been saved.",
+        ),
+      );
 
       if (updateError) throw updateError;
       if (!data) {

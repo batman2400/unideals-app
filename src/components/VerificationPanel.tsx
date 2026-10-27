@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
@@ -23,6 +23,13 @@ import {
   uploadVerificationImage,
 } from "@/lib/verificationDocuments";
 import { colors, radius, spacing } from "@/theme";
+import {
+  IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+  IMAGE_UPLOAD_TIMEOUT_MS,
+  REQUEST_TIMEOUT_MS,
+  tookTooLongMessage,
+  withTimeout,
+} from "@/lib/withTimeout";
 import type {
   InstitutionType,
   VerificationRpcResult,
@@ -268,6 +275,7 @@ function EmailOtpForm({
   const [otpCode, setOtpCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const inFlightRef = useRef(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   const chosenUniversityName = useCallback(
@@ -314,6 +322,7 @@ function EmailOtpForm({
   ]);
 
   const requestOtp = useCallback(async () => {
+    if (inFlightRef.current) return;
     setError(null);
     const formError = validateForm();
     if (formError) {
@@ -321,11 +330,18 @@ function EmailOtpForm({
       return;
     }
 
+    inFlightRef.current = true;
     setBusy(true);
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke(
-        "send-verification-otp",
-        { body: { email: uniEmail.trim().toLowerCase() } },
+      const { data, error: invokeError } = await withTimeout(
+        supabase.functions.invoke("send-verification-otp", {
+          body: { email: uniEmail.trim().toLowerCase() },
+        }),
+        REQUEST_TIMEOUT_MS,
+        tookTooLongMessage(
+          "Sending the code",
+          "the code may already have been sent.",
+        ),
       );
       const payload = data as VerificationRpcResult | null;
       if (payload?.success) {
@@ -346,11 +362,13 @@ function EmailOtpForm({
     } catch (caught) {
       setError(toErrorMessage(caught, "Couldn't send the verification code."));
     } finally {
+      inFlightRef.current = false;
       setBusy(false);
     }
   }, [uniEmail, validateForm]);
 
   const confirmOtp = useCallback(async () => {
+    if (inFlightRef.current) return;
     setError(null);
     const institution = chosenUniversityName();
     if (!institution) {
@@ -362,11 +380,11 @@ function EmailOtpForm({
       return;
     }
 
+    inFlightRef.current = true;
     setBusy(true);
     try {
-      const { data, error: rpcError } = await supabase.rpc(
-        "confirm_university_verification",
-        {
+      const { data, error: rpcError } = await withTimeout(
+        supabase.rpc("confirm_university_verification", {
           entered_email: uniEmail.trim().toLowerCase(),
           entered_code: otpCode,
           inst_name: institution,
@@ -374,7 +392,12 @@ function EmailOtpForm({
           student_id: null,
           image_url: null,
           image_back_url: null,
-        },
+        }),
+        REQUEST_TIMEOUT_MS,
+        tookTooLongMessage(
+          "Checking the code",
+          "you may already be verified. Pull to refresh before trying again.",
+        ),
       );
       if (rpcError) throw rpcError;
       const result = data as VerificationRpcResult;
@@ -386,6 +409,7 @@ function EmailOtpForm({
     } catch (caught) {
       setError(toErrorMessage(caught, "An error occurred."));
     } finally {
+      inFlightRef.current = false;
       setBusy(false);
     }
   }, [chosenUniversityName, onSubmitted, otpCode, uniEmail]);
@@ -477,10 +501,12 @@ function ManualForm({
   const [back, setBack] = useState<ProofAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const inFlightRef = useRef(false);
 
   const institutionName = instName.trim();
 
   const submit = useCallback(async () => {
+    if (inFlightRef.current) return;
     setError(null);
     if (!userId || !institutionName || !front || !back) {
       setError("Institution name and both sides of your student ID are required.");
@@ -491,36 +517,49 @@ function ManualForm({
       return;
     }
 
+    inFlightRef.current = true;
     setBusy(true);
     try {
       const [frontPath, backPath] = await Promise.all([
-        uploadVerificationImage({
-          userId,
-          uri: front.uri,
-          mimeType: front.mimeType,
-          fileName: front.fileName,
-          side: "front",
-        }),
-        uploadVerificationImage({
-          userId,
-          uri: back.uri,
-          mimeType: back.mimeType,
-          fileName: back.fileName,
-          side: "back",
-        }),
+        withTimeout(
+          uploadVerificationImage({
+            userId,
+            uri: front.uri,
+            mimeType: front.mimeType,
+            fileName: front.fileName,
+            side: "front",
+          }),
+          IMAGE_UPLOAD_TIMEOUT_MS,
+          IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+        ),
+        withTimeout(
+          uploadVerificationImage({
+            userId,
+            uri: back.uri,
+            mimeType: back.mimeType,
+            fileName: back.fileName,
+            side: "back",
+          }),
+          IMAGE_UPLOAD_TIMEOUT_MS,
+          IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+        ),
       ]);
 
-      const { data, error: rpcError } = await supabase.rpc(
-        "submit_manual_verification",
-        {
+      const { data, error: rpcError } = await withTimeout(
+        supabase.rpc("submit_manual_verification", {
           inst_type: instType,
           inst_name: institutionName,
-          course: instType === "school" ? course.trim() : course.trim(),
+          course: course.trim(),
           student_id: studentId.trim(),
           email: accountEmail || "unknown@example.com",
           image_url: frontPath,
           image_back_url: backPath,
-        },
+        }),
+        REQUEST_TIMEOUT_MS,
+        tookTooLongMessage(
+          "Sending your ID",
+          "the request may already have been sent.",
+        ),
       );
       if (rpcError) throw rpcError;
       const result = data as VerificationRpcResult;
@@ -532,6 +571,7 @@ function ManualForm({
     } catch (caught) {
       setError(toErrorMessage(caught, "An error occurred during submission."));
     } finally {
+      inFlightRef.current = false;
       setBusy(false);
     }
   }, [

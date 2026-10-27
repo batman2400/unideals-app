@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,6 +20,13 @@ import {
   type BrandApplicationStatus,
 } from "@/lib/useBrandApplication";
 import { toErrorMessage } from "@/lib/supabase";
+import {
+  IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+  IMAGE_UPLOAD_TIMEOUT_MS,
+  REQUEST_TIMEOUT_MS,
+  tookTooLongMessage,
+  withTimeout,
+} from "@/lib/withTimeout";
 import { colors, radius, spacing } from "@/theme";
 
 function statusBanner(status: BrandApplicationStatus, reason: string | null): string {
@@ -55,6 +62,7 @@ export default function BecomePartnerScreen() {
   const [location, setLocation] = useState("");
   const [logo, setLogo] = useState<PickedImage | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const inFlightRef = useRef(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const categoryOptions = useMemo(
@@ -76,40 +84,53 @@ export default function BecomePartnerScreen() {
   }, [application]);
 
   const handleSubmit = useCallback(async () => {
-    if (!user?.id || submitting) return;
+    if (!user?.id || inFlightRef.current) return;
+    inFlightRef.current = true;
     setFormError(null);
     setSubmitted(false);
     setSubmitting(true);
     try {
       let logoUrl = application?.logoUrl ?? null;
       if (logo) {
-        const uploaded = await uploadApplicationLogo({
-          uri: logo.uri,
-          userId: user.id,
-          mimeType: logo.mimeType,
-          fileSize: logo.fileSize,
-        });
+        const uploaded = await withTimeout(
+          uploadApplicationLogo({
+            uri: logo.uri,
+            userId: user.id,
+            mimeType: logo.mimeType,
+            fileSize: logo.fileSize,
+          }),
+          IMAGE_UPLOAD_TIMEOUT_MS,
+          IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+        );
         logoUrl = uploaded.publicUrl;
       }
 
-      await submitBrandApplication({
-        name,
-        contactName,
-        contactPhone,
-        category,
-        description,
-        websiteUrl,
-        instagramHandle,
-        tiktokHandle,
-        location,
-        logoUrl,
-      });
+      await withTimeout(
+        submitBrandApplication({
+          name,
+          contactName,
+          contactPhone,
+          category,
+          description,
+          websiteUrl,
+          instagramHandle,
+          tiktokHandle,
+          location,
+          logoUrl,
+        }),
+        REQUEST_TIMEOUT_MS,
+        tookTooLongMessage(
+          "Sending your application",
+          "the application may already have been sent.",
+        ),
+      );
       setLogo(null);
       setSubmitted(true);
       await refresh();
     } catch (caught) {
       setFormError(toErrorMessage(caught, "Couldn't submit your application."));
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }, [
@@ -123,7 +144,6 @@ export default function BecomePartnerScreen() {
     logo,
     name,
     refresh,
-    submitting,
     tiktokHandle,
     user?.id,
     websiteUrl,

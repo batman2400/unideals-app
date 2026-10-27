@@ -1,11 +1,12 @@
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -26,13 +27,47 @@ import { asHttpUrl } from "@/lib/httpUrl";
 import { validateLocation } from "@/lib/maps";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
-import { colors, spacing } from "@/theme";
+import { colors, radius, spacing } from "@/theme";
 import {
   EVENT_AUDIENCE_OPTIONS,
   EVENT_CATEGORY_OPTIONS,
   type EventAudience,
   type EventCategory,
 } from "@/types/database";
+
+const SUBMIT_TIMEOUT_MS = 20_000;
+
+class SubmitTimeoutError extends Error {
+  constructor() {
+    super("SUBMIT_TIMEOUT");
+    this.name = "SubmitTimeoutError";
+  }
+}
+
+/** A stalled upload or save would otherwise leave the button spinning. */
+function withTimeout<T>(
+  promiseLike: PromiseLike<T>,
+  ms = SUBMIT_TIMEOUT_MS,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new SubmitTimeoutError()), ms);
+  });
+  return Promise.race([Promise.resolve(promiseLike), timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function explainSubmitError(error: unknown): string {
+  if (error instanceof SubmitTimeoutError) {
+    return "This is taking too long. Your details are still here. Check your connection and try again. If it keeps happening, wait a minute first: the event may already have been saved, and it stays hidden until an admin approves it.";
+  }
+  const message = toErrorMessage(error, "Failed to create event.");
+  if (/row-level security/i.test(message)) {
+    return "Could not save this event. Sign out, sign back in, and try again. If you added a cover image, try submitting once without it.";
+  }
+  return message;
+}
 
 export default function CreateEventScreen() {
   const router = useRouter();
@@ -56,7 +91,9 @@ export default function CreateEventScreen() {
   const [image, setImage] = useState<PickedImage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const inFlightRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   const isDirty = useMemo(
     () =>
@@ -93,10 +130,29 @@ export default function CreateEventScreen() {
       targetAudience,
     ],
   );
-  const allowLeave = useUnsavedChangesGuard(isDirty);
+  useUnsavedChangesGuard(isDirty);
+
+  const resetForm = useCallback(() => {
+    setTitle("");
+    setDescription("");
+    setCategory("social");
+    setUniversityName("");
+    setClubName("");
+    setLocationName("");
+    setLocationAddress("");
+    setIsOnline(false);
+    setTargetAudience("all_students");
+    setExternalRegistrationUrl("");
+    setStartAt(null);
+    setEndAt(null);
+    setPublishAt(null);
+    setImage(null);
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (inFlightRef.current) return;
+    setError(null);
+    setSuccess(false);
     if (!user) {
       setError("You must be signed in to submit an event.");
       return;
@@ -115,6 +171,12 @@ export default function CreateEventScreen() {
     }
     if (!startAt) {
       setError("Start date and time are required.");
+      return;
+    }
+    if (startAt.getTime() < Date.now() - 60 * 1000) {
+      setError(
+        "That start time has already passed. Pick a new start date and time in the future.",
+      );
       return;
     }
 
@@ -138,15 +200,12 @@ export default function CreateEventScreen() {
 
     inFlightRef.current = true;
     setIsSubmitting(true);
-    setError(null);
 
     try {
-      const {
-        data: { user: authUser },
-        error: authError,
-      } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      const organizerId = authUser?.id ?? user.id;
+      // The screen already holds the signed-in user. Calling auth.getUser()
+      // here waits on the auth lock and can hang on repeat submits. The
+      // server sets the real organizer from the session anyway.
+      const organizerId = user.id;
       if (!organizerId) {
         throw new Error("You must be signed in to submit an event.");
       }
@@ -154,12 +213,14 @@ export default function CreateEventScreen() {
       let coverImageUrl: string | null = null;
       if (image) {
         try {
-          const uploaded = await uploadEventImage({
-            uri: image.uri,
-            userId: organizerId,
-            mimeType: image.mimeType,
-            fileSize: image.fileSize,
-          });
+          const uploaded = await withTimeout(
+            uploadEventImage({
+              uri: image.uri,
+              userId: organizerId,
+              mimeType: image.mimeType,
+              fileSize: image.fileSize,
+            }),
+          );
           coverImageUrl = uploaded.publicUrl;
         } catch (uploadErr) {
           const uploadMessage = toErrorMessage(
@@ -192,50 +253,43 @@ export default function CreateEventScreen() {
         p_external_registration_url: registrationUrl,
       };
 
-      const { error: rpcError } = await supabase.rpc(
-        "submit_pending_event",
-        rpcArgs,
+      const { error: rpcError } = await withTimeout(
+        supabase.rpc("submit_pending_event", rpcArgs),
       );
 
       if (rpcError && /could not find the function/i.test(rpcError.message)) {
-        const { error: insertError } = await supabase.from("events").insert([
-          {
-            title: rpcArgs.p_title,
-            description: rpcArgs.p_description,
-            start_time: rpcArgs.p_start_time,
-            end_time: rpcArgs.p_end_time,
-            publish_at: rpcArgs.p_publish_at,
-            location_name: rpcArgs.p_location_name,
-            location_address: rpcArgs.p_location_address,
-            is_online: rpcArgs.p_is_online,
-            category: rpcArgs.p_category,
-            university_name: rpcArgs.p_university_name,
-            club_name: rpcArgs.p_club_name,
-            cover_image_url: rpcArgs.p_cover_image_url,
-            target_audience: rpcArgs.p_target_audience,
-            external_registration_url: rpcArgs.p_external_registration_url,
-            organizer_id: organizerId,
-            status: "pending",
-          },
-        ]);
+        const { error: insertError } = await withTimeout(
+          supabase.from("events").insert([
+            {
+              title: rpcArgs.p_title,
+              description: rpcArgs.p_description,
+              start_time: rpcArgs.p_start_time,
+              end_time: rpcArgs.p_end_time,
+              publish_at: rpcArgs.p_publish_at,
+              location_name: rpcArgs.p_location_name,
+              location_address: rpcArgs.p_location_address,
+              is_online: rpcArgs.p_is_online,
+              category: rpcArgs.p_category,
+              university_name: rpcArgs.p_university_name,
+              club_name: rpcArgs.p_club_name,
+              cover_image_url: rpcArgs.p_cover_image_url,
+              target_audience: rpcArgs.p_target_audience,
+              external_registration_url: rpcArgs.p_external_registration_url,
+              organizer_id: organizerId,
+              status: "pending",
+            },
+          ]),
+        );
         if (insertError) throw insertError;
       } else if (rpcError) {
         throw rpcError;
       }
 
-      allowLeave();
-      Alert.alert(
-        "Submitted for review",
-        "Your event will appear on the public feed once an admin approves it.",
-        [{ text: "OK", onPress: () => router.back() }],
-      );
+      setSuccess(true);
+      resetForm();
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (caught) {
-      const message = toErrorMessage(caught, "Failed to create event.");
-      setError(
-        /row-level security/i.test(message)
-          ? "Could not save this event. Sign out, sign back in, and try again. If you added a cover image, try submitting once without it."
-          : message,
-      );
+      setError(explainSubmitError(caught));
     } finally {
       inFlightRef.current = false;
       setIsSubmitting(false);
@@ -256,12 +310,12 @@ export default function CreateEventScreen() {
     isOnline,
     targetAudience,
     externalRegistrationUrl,
-    allowLeave,
-    router,
+    resetForm,
   ]);
 
   return (
     <KeyboardFormScroll
+      ref={scrollRef}
       style={styles.root}
       contentContainerStyle={{
         padding: spacing.lg,
@@ -269,6 +323,24 @@ export default function CreateEventScreen() {
         gap: spacing.lg,
       }}
     >
+        {success ? (
+          <View style={styles.success}>
+            <Text style={styles.successTitle}>Event submitted</Text>
+            <Text style={styles.successBody}>
+              Your event is saved and pending review. It will not show on the
+              public feed until an admin approves it. You can submit another
+              event below.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.back()}
+              style={styles.successLinkHit}
+            >
+              <Text style={styles.successLink}>Back to Events</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <Text style={styles.lead}>
           Submit your event for review. It appears on the public feed once an
           admin approves it.
@@ -423,5 +495,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.error,
+  },
+  success: {
+    backgroundColor: colors.primaryContainer,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  successTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.onPrimaryContainer,
+  },
+  successBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.onPrimaryContainer,
+  },
+  successLinkHit: {
+    alignSelf: "flex-start",
+  },
+  successLink: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.onPrimaryFixed,
+    textDecorationLine: "underline",
   },
 });
