@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 
 export interface PartnerBrand {
   brandId: string | null;
@@ -56,21 +57,34 @@ export async function getPartnerBrand(
     };
   }
 
-  const { data, error } = await supabase
-    .from("partner_profiles")
-    .select(
-      `
-      brand_id,
-      brand_name,
-      brands (
-        id,
-        name,
-        logo_url
-      )
-    `,
-    )
-    .eq("user_id", userId)
-    .maybeSingle();
+  let data: unknown;
+  let error: unknown;
+  try {
+    const res = await withTimeout(
+      supabase
+        .from("partner_profiles")
+        .select(
+          `
+          brand_id,
+          brand_name,
+          brands (
+            id,
+            name,
+            logo_url
+          )
+        `,
+        )
+        .eq("user_id", userId)
+        .limit(1),
+      REQUEST_TIMEOUT_MS,
+      "Couldn't load your brand profile.",
+    );
+    const rows = Array.isArray(res.data) ? res.data : res.data ? [res.data] : [];
+    data = rows[0] ?? null;
+    error = res.error;
+  } catch (caught) {
+    error = caught;
+  }
 
   if (error) {
     return {

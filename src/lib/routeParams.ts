@@ -1,7 +1,33 @@
+import type { Href } from "expo-router";
+
 /**
  * Expo Router can pass dynamic segments as `string | string[]`.
  * Always collapse to a single id before Number() / RPC lookups.
  */
+
+/** Opens `app/deal/[id]` with the id param the detail screen reads. */
+export function dealPath(id: number | string): Href {
+  return {
+    pathname: "/deal/[id]",
+    params: { id: String(id) },
+  };
+}
+
+/** Opens `app/event/[id]` with the id param the detail screen reads. */
+export function eventPath(id: number | string): Href {
+  return {
+    pathname: "/event/[id]",
+    params: { id: String(id) },
+  };
+}
+
+/** Opens `app/perk/[id]` with the id param the detail screen reads. */
+export function perkPath(id: number | string): Href {
+  return {
+    pathname: "/perk/[id]",
+    params: { id: String(id) },
+  } as unknown as Href;
+}
 export function asRouteId(param: string | string[] | undefined): string {
   if (Array.isArray(param)) {
     return param[0] ?? "";

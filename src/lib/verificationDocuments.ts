@@ -1,3 +1,4 @@
+import { prepareImageForUpload } from "@/lib/compressImage";
 import { uploadLocalFile } from "@/lib/uploadLocalFile";
 
 const PROOF_BUCKET = "verification-documents";
@@ -42,15 +43,25 @@ export async function uploadVerificationImage(input: {
   uri: string;
   mimeType: string | null;
   fileName?: string | null;
+  fileSize?: number | null;
   side: "front" | "back";
 }): Promise<string> {
-  const mimeType = assertIdImageType(input.mimeType, input.fileName);
+  const prepared = await prepareImageForUpload({
+    uri: input.uri,
+    mimeType: input.mimeType,
+    fileSize: input.fileSize,
+    maxEdge: 2000,
+    compress: 0.8,
+    maxBytes: ID_UPLOAD_MAX_BYTES,
+    tooLargeMessage: "That file is too large. The limit is 5MB.",
+  });
+  const mimeType = assertIdImageType(prepared.mimeType, input.fileName);
   const ext = extensionFromMime(mimeType);
   const filePath = `${input.userId}/${input.side}-${Date.now()}.${ext}`;
   await uploadLocalFile({
     bucket: PROOF_BUCKET,
     path: filePath,
-    uri: input.uri,
+    uri: prepared.uri,
     contentType: mimeType,
     maxBytes: ID_UPLOAD_MAX_BYTES,
     tooLargeMessage: "That file is too large. The limit is 5MB.",

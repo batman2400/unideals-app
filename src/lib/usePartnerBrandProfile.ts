@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isDuplicateBrandName, validateBrandProfile } from "@/lib/brandForm";
 import { uploadBrandLogo, type UploadBrandLogoInput } from "@/lib/brandLogoUpload";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 import type { Brand, BrandRow } from "@/types/database";
 import { mapBrand } from "@/types/database";
 
@@ -94,52 +95,69 @@ export function usePartnerBrandProfile(
       }
       setError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from("partner_profiles")
-        .select(
-          `
-          brand_id,
-          brand_name,
-          brands (${BRAND_SELECT})
-        `,
-        )
-        .eq("user_id", userId);
+      try {
+        const { data, error: fetchError } = await withTimeout(
+          supabase
+            .from("partner_profiles")
+            .select(
+              `
+              brand_id,
+              brand_name,
+              brands (${BRAND_SELECT})
+            `,
+            )
+            .eq("user_id", userId),
+          REQUEST_TIMEOUT_MS,
+          "Couldn't load your brand profile. Check your connection and refresh.",
+        );
 
-      if (!activeRef.current) return;
+        if (!activeRef.current) return;
 
-      if (fetchError) {
+        if (fetchError) {
+          setError(
+            toErrorMessage(
+              fetchError,
+              "Couldn't load your brand profile. Check your connection and refresh.",
+            ),
+          );
+          setBrands([]);
+          setUnlinkedName(null);
+          return;
+        }
+
+        const rows = (data ?? []) as PartnerProfileJoinRow[];
+        const mapped: Brand[] = [];
+        let fallbackName: string | null = null;
+
+        for (const row of rows) {
+          const joined = unwrapBrand(row.brands);
+          if (joined?.id) {
+            mapped.push(mapBrand(joined));
+            continue;
+          }
+          if (!fallbackName && row.brand_name?.trim()) {
+            fallbackName = row.brand_name.trim();
+          }
+        }
+
+        setBrands(mapped);
+        setUnlinkedName(mapped.length === 0 ? fallbackName : null);
+      } catch (caught) {
+        if (!activeRef.current) return;
         setError(
           toErrorMessage(
-            fetchError,
+            caught,
             "Couldn't load your brand profile. Check your connection and refresh.",
           ),
         );
         setBrands([]);
         setUnlinkedName(null);
-        setIsLoading(false);
-        setIsRefreshing(false);
-        return;
-      }
-
-      const rows = (data ?? []) as PartnerProfileJoinRow[];
-      const mapped: Brand[] = [];
-      let fallbackName: string | null = null;
-
-      for (const row of rows) {
-        const joined = unwrapBrand(row.brands);
-        if (joined?.id) {
-          mapped.push(mapBrand(joined));
-          continue;
-        }
-        if (!fallbackName && row.brand_name?.trim()) {
-          fallbackName = row.brand_name.trim();
+      } finally {
+        if (activeRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
         }
       }
-
-      setBrands(mapped);
-      setUnlinkedName(mapped.length === 0 ? fallbackName : null);
-      setIsLoading(false);
-      setIsRefreshing(false);
     },
     [userId],
   );

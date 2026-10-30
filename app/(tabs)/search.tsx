@@ -24,6 +24,7 @@ import {
   type SearchScope,
 } from "@/context/TabBarMotionContext";
 import { brandHubPath, resolveBrandExplore } from "@/lib/brandPath";
+import { dealPath, eventPath, perkPath } from "@/lib/routeParams";
 import {
   partitionDeals,
   partitionEvents,
@@ -333,7 +334,7 @@ export default function SearchScreen() {
               return (
                 <PerkCard
                   perk={item.perk}
-                  onPress={() => router.push(`/perk/${item.perk.id}` as Href)}
+                  onPress={() => router.push(perkPath(item.perk.id))}
                 />
               );
             }
@@ -344,14 +345,14 @@ export default function SearchScreen() {
                   saved={savedIds.has(item.deal.id)}
                   saveDisabled={savedLoading}
                   onToggleSave={toggleSave}
-                  onPress={(deal) => router.push(`/deal/${deal.id}` as Href)}
+                  onPress={(deal) => router.push(dealPath(deal.id))}
                 />
               );
             }
             return (
               <EventCard
                 event={item.event}
-                onPress={(event) => router.push(`/event/${event.id}` as Href)}
+                onPress={(event) => router.push(eventPath(event.id))}
               />
             );
           }}

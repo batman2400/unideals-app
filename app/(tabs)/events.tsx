@@ -22,7 +22,7 @@ import {
   useTabBarMotion,
 } from "@/context/TabBarMotionContext";
 import { partitionEvents, splitLiveEvents } from "@/lib/eventTiming";
-import { asScheduleParam } from "@/lib/routeParams";
+import { asScheduleParam, eventPath } from "@/lib/routeParams";
 import { useEvents } from "@/lib/useEvents";
 import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
@@ -167,7 +167,7 @@ export default function EventsScreen() {
           renderItem={({ item }) => (
             <EventCard
               event={item}
-              onPress={(event) => router.push(`/event/${event.id}` as Href)}
+              onPress={(event) => router.push(eventPath(event.id))}
             />
           )}
           ListHeaderComponent={

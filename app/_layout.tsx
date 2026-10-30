@@ -15,17 +15,19 @@ import { ConfigMissingScreen } from "@/components/ConfigMissingScreen";
 import { SearchMorph } from "@/components/SearchMorph";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { TabBarMotionProvider } from "@/context/TabBarMotionContext";
+import { applyExpoUpdateIfAvailable } from "@/lib/applyExpoUpdate";
 import { handleAuthDeepLink } from "@/lib/authDeepLink";
 import {
   consumeInitialPushTarget,
   subscribeToPushResponses,
   type PushTarget,
 } from "@/lib/pushNotifications";
-import { qrPayloadKind } from "@/lib/routeParams";
+import { dealPath, eventPath, qrPayloadKind } from "@/lib/routeParams";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { colors } from "@/theme";
 
 void SplashScreen.preventAutoHideAsync();
+void applyExpoUpdateIfAvailable();
 
 /** Avoid re-processing the launch URL on Fast Refresh / guard remounts. */
 let didConsumeInitialAuthUrl = false;
@@ -114,11 +116,11 @@ function NavigationGuard() {
 
     const openTarget = (target: PushTarget) => {
       if (target.type === "deal") {
-        router.push(`/deal/${target.id}` as Href);
+        router.push(dealPath(target.id));
         return;
       }
       if (target.type === "event") {
-        router.push(`/event/${target.id}` as Href);
+        router.push(eventPath(target.id));
         return;
       }
       if (target.type === "verification") {

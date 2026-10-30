@@ -2,6 +2,10 @@
  * Port of the web app's `src/lib/dealImageUpload.js`.
  * Uploads to the public `deal-images` bucket from a local image URI.
  */
+import {
+  extensionForMime,
+  prepareImageForUpload,
+} from "@/lib/compressImage";
 import { supabase } from "@/lib/supabase";
 import { uploadLocalFile } from "@/lib/uploadLocalFile";
 
@@ -15,14 +19,6 @@ function sanitizePathSegment(value: string | null | undefined): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
-}
-
-function extensionFromUri(uri: string, mimeType?: string | null): string {
-  if (mimeType?.includes("png")) return "png";
-  if (mimeType?.includes("webp")) return "webp";
-  if (mimeType?.includes("jpeg") || mimeType?.includes("jpg")) return "jpg";
-  const match = uri.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
-  return match?.[1]?.toLowerCase() ?? "jpg";
 }
 
 function randomSuffix(): string {
@@ -49,26 +45,23 @@ export async function uploadDealImage(
     throw new Error("Unable to resolve partner account for image upload.");
   }
 
-  if (input.fileSize != null && input.fileSize > MAX_BYTES) {
-    throw new Error("Image is too large. Maximum size is 5MB.");
-  }
-
-  if (input.mimeType && !input.mimeType.startsWith("image/")) {
-    throw new Error("Only image files are allowed.");
-  }
+  const prepared = await prepareImageForUpload({
+    uri: input.uri,
+    mimeType: input.mimeType,
+    fileSize: input.fileSize,
+    maxBytes: MAX_BYTES,
+    tooLargeMessage: "Image is too large. Maximum size is 5MB.",
+  });
 
   const brandSegment = sanitizePathSegment(input.brandName) || "brand";
-  const ext = extensionFromUri(input.uri, input.mimeType);
+  const ext = extensionForMime(prepared.mimeType);
   const filePath = `partners/${input.userId}/${brandSegment}/${Date.now()}-${randomSuffix()}.${ext}`;
-  const contentType = input.mimeType?.startsWith("image/")
-    ? input.mimeType
-    : `image/${ext === "jpg" ? "jpeg" : ext}`;
 
   await uploadLocalFile({
     bucket: DEAL_IMAGES_BUCKET,
     path: filePath,
-    uri: input.uri,
-    contentType,
+    uri: prepared.uri,
+    contentType: prepared.mimeType,
     maxBytes: MAX_BYTES,
     tooLargeMessage: "Image is too large. Maximum size is 5MB.",
     errorMessage: "Failed to upload image.",

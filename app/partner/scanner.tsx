@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/Button";
 import { KeyboardFormScroll, requestKeyboardScroll } from "@/components/KeyboardForm";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import {
   STUDENT_PASS_URI_PREFIX,
@@ -70,9 +71,13 @@ export default function PartnerScannerScreen() {
       setOutcome(null);
 
       try {
-        const { data, error: rpcError } = await supabase.rpc(
-          "validate_instore_ticket",
-          { scanned_payload: trimmed, scan_method: method },
+        const { data, error: rpcError } = await withTimeout(
+          supabase.rpc("validate_instore_ticket", {
+            scanned_payload: trimmed,
+            scan_method: method,
+          }),
+          REQUEST_TIMEOUT_MS,
+          "Verification is taking too long. Check your connection and try again.",
         );
 
         if (rpcError) {
@@ -104,6 +109,8 @@ export default function PartnerScannerScreen() {
             ].slice(0, 5),
           );
         }
+      } catch (caught) {
+        setError(toErrorMessage(caught, "Verification failed. Try again."));
       } finally {
         verifyingRef.current = false;
         setIsVerifying(false);

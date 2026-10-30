@@ -17,6 +17,7 @@ import {
   type UniversityDomainRow,
   type UniversityOption,
 } from "@/lib/universities";
+import { compressImage } from "@/lib/compressImage";
 import {
   ID_UPLOAD_MAX_BYTES,
   assertIdImageType,
@@ -41,6 +42,7 @@ interface ProofAsset {
   uri: string;
   mimeType: string | null;
   fileName: string | null;
+  fileSize: number | null;
 }
 
 interface VerificationPanelProps {
@@ -527,6 +529,7 @@ function ManualForm({
             uri: front.uri,
             mimeType: front.mimeType,
             fileName: front.fileName,
+            fileSize: front.fileSize,
             side: "front",
           }),
           IMAGE_UPLOAD_TIMEOUT_MS,
@@ -538,6 +541,7 @@ function ManualForm({
             uri: back.uri,
             mimeType: back.mimeType,
             fileName: back.fileName,
+            fileSize: back.fileSize,
             side: "back",
           }),
           IMAGE_UPLOAD_TIMEOUT_MS,
@@ -668,7 +672,10 @@ function IdPhotoPicker({
   value: ProofAsset | null;
   onChange: (next: ProofAsset) => void;
 }) {
+  const [preparing, setPreparing] = useState(false);
+
   const pick = useCallback(async () => {
+    if (preparing) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(
@@ -686,28 +693,52 @@ function IdPhotoPicker({
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
-    if (asset.fileSize != null && asset.fileSize > ID_UPLOAD_MAX_BYTES) {
-      Alert.alert("Image too large", "Please choose an image under 5MB.");
-      return;
-    }
-    let mimeType: string;
+    setPreparing(true);
     try {
-      mimeType = assertIdImageType(asset.mimeType, asset.fileName);
+      const compressed = await compressImage({
+        uri: asset.uri,
+        width: asset.width,
+        height: asset.height,
+        fileSize: asset.fileSize,
+        mimeType: asset.mimeType,
+        maxEdge: 2000,
+        compress: 0.8,
+      });
+      if (
+        compressed.fileSize != null &&
+        compressed.fileSize > ID_UPLOAD_MAX_BYTES
+      ) {
+        Alert.alert(
+          "Image too large",
+          "That photo is still over 5MB after resizing. Please choose another.",
+        );
+        return;
+      }
+      const ext =
+        compressed.mimeType === "image/png"
+          ? "png"
+          : compressed.mimeType === "image/webp"
+            ? "webp"
+            : "jpg";
+      const base = asset.fileName?.replace(/\.\w+$/, "") || "id-photo";
+      const fileName = `${base}.${ext}`;
+      onChange({
+        uri: compressed.uri,
+        mimeType: assertIdImageType(compressed.mimeType, fileName),
+        fileName,
+        fileSize: compressed.fileSize,
+      });
     } catch (error) {
       Alert.alert(
-        "Unsupported image",
+        "Couldn't prepare that image",
         error instanceof Error
           ? error.message
-          : "Please upload a JPEG, PNG, or WEBP image.",
+          : "Try a different photo. Large pictures are resized before upload.",
       );
-      return;
+    } finally {
+      setPreparing(false);
     }
-    onChange({
-      uri: asset.uri,
-      mimeType,
-      fileName: asset.fileName ?? null,
-    });
-  }, [onChange]);
+  }, [onChange, preparing]);
 
   return (
     <View style={styles.photoBlock}>
@@ -716,12 +747,16 @@ function IdPhotoPicker({
         variant="ghost"
         onPress={() => void pick()}
       />
-      {value ? (
+      {preparing ? (
+        <Text style={styles.photoHint}>Preparing image</Text>
+      ) : value ? (
         <Text style={styles.fileName} numberOfLines={1}>
           {value.fileName || "Photo selected"}
         </Text>
       ) : (
-        <Text style={styles.photoHint}>{label} · JPEG, PNG, or WEBP · max 5MB</Text>
+        <Text style={styles.photoHint}>
+          {label} · large photos are resized automatically
+        </Text>
       )}
     </View>
   );

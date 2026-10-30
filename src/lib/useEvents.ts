@@ -7,9 +7,23 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { supabase, toErrorMessage } from "@/lib/supabase";
 import { isFinishedEvent } from "@/lib/eventTiming";
+import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 import { mapEvent, type CampusEvent, type EventRow } from "@/types/database";
+
+const eventsById = new Map<string, CampusEvent>();
+
+export function rememberEvents(events: readonly CampusEvent[]): void {
+  for (const event of events) {
+    if (event.id) eventsById.set(String(event.id), event);
+  }
+}
+
+export function rememberedEvent(id: string | undefined): CampusEvent | null {
+  if (!id) return null;
+  return eventsById.get(String(id)) ?? null;
+}
 
 export interface UseEventsResult {
   events: CampusEvent[];
@@ -35,39 +49,26 @@ export function useEvents(): UseEventsResult {
     setError(null);
 
     try {
-      const queryPromise = supabase
-        .from("events")
-        .select("*")
-        .eq("status", "approved")
-        .order("start_time", { ascending: true });
-
-      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
-        setTimeout(
-          () =>
-            resolve({
-              data: null,
-              error: { message: "Request timed out. Please check your connection." },
-            }),
-          8000,
-        ),
+      const { data, error: fetchError } = await withTimeout(
+        supabase
+          .from("events")
+          .select("*")
+          .eq("status", "approved")
+          .order("start_time", { ascending: true }),
+        REQUEST_TIMEOUT_MS,
+        "Request timed out. Please check your connection.",
       );
-
-      const result = await Promise.race([queryPromise, timeoutPromise]);
-      const { data, error: fetchError } = result as {
-        data: EventRow[] | null;
-        error: unknown;
-      };
 
       if (!activeRef.current) return;
 
       if (fetchError) {
         setError(toErrorMessage(fetchError, "Could not load events."));
       } else {
-        setEvents(
-          ((data ?? []) as EventRow[])
-            .map(mapEvent)
-            .filter((event) => !isFinishedEvent(event)),
-        );
+        const mapped = ((data ?? []) as EventRow[])
+          .map(mapEvent)
+          .filter((event) => !isFinishedEvent(event));
+        rememberEvents(mapped);
+        setEvents(mapped);
       }
     } catch (err) {
       if (!activeRef.current) return;
@@ -103,14 +104,15 @@ export interface UseEventResult {
 }
 
 export function useEvent(id: string | undefined): UseEventResult {
-  const [event, setEvent] = useState<CampusEvent | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedOnMount = rememberedEvent(id);
+  const [event, setEvent] = useState<CampusEvent | null>(cachedOnMount);
+  const [isLoading, setIsLoading] = useState(cachedOnMount == null);
   const [error, setError] = useState<string | null>(null);
   const activeRef = useRef(true);
+  const requestIdRef = useRef(0);
 
   const load = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
-    setError(null);
+    const requestId = ++requestIdRef.current;
 
     if (!id) {
       setEvent(null);
@@ -119,22 +121,53 @@ export function useEvent(id: string | undefined): UseEventResult {
       return;
     }
 
-    const { data, error: fetchError } = await supabase
-      .from("events")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle<EventRow>();
-
-    if (!activeRef.current) return;
-
-    if (fetchError) {
-      setError(toErrorMessage(fetchError, "Could not load this event."));
-      setEvent(null);
+    const cached = rememberedEvent(id);
+    if (cached) {
+      setEvent(cached);
+      setError(null);
+      setIsLoading(false);
     } else {
-      setEvent(data ? mapEvent(data) : null);
+      setIsLoading(true);
+      setError(null);
     }
 
-    setIsLoading(false);
+    try {
+      const { data, error: fetchError } = await withTimeout(
+        supabase
+          .from("events")
+          .select("*")
+          .eq("id", id)
+          .limit(1),
+        REQUEST_TIMEOUT_MS,
+        "Opening this event is taking too long. Check your connection and try again.",
+      );
+
+      if (!activeRef.current || requestId !== requestIdRef.current) return;
+
+      if (fetchError) {
+        if (!rememberedEvent(id)) {
+          setError(toErrorMessage(fetchError, "Could not load this event."));
+          setEvent(null);
+        }
+        return;
+      }
+
+      const rows = (Array.isArray(data) ? data : data ? [data] : []) as EventRow[];
+      const next = rows[0] ? mapEvent(rows[0]) : null;
+      if (next) rememberEvents([next]);
+      setEvent(next);
+      setError(next ? null : "This event could not be found.");
+    } catch (caught) {
+      if (!activeRef.current || requestId !== requestIdRef.current) return;
+      if (!rememberedEvent(id)) {
+        setEvent(null);
+        setError(toErrorMessage(caught, "Could not load this event."));
+      }
+    } finally {
+      if (activeRef.current && requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
+    }
   }, [id]);
 
   useEffect(() => {
@@ -167,4 +200,3 @@ export function filterEvents(
     ].some((field) => field?.toLowerCase().includes(normalized)),
   );
 }
-

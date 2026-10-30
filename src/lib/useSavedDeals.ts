@@ -7,6 +7,7 @@ import { Alert } from "react-native";
 
 import { useAuth } from "@/context/AuthContext";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 
 const DUPLICATE_SAVE_CODE = "23505";
 
@@ -41,24 +42,37 @@ export function useSavedDeals(): UseSavedDealsResult {
       setIsLoading(true);
     }
 
-    const { data, error: queryError } = await supabase
-      .from("saved_deals")
-      .select("deal_id")
-      .eq("user_id", user.id);
+    try {
+      const { data, error: queryError } = await withTimeout(
+        supabase
+          .from("saved_deals")
+          .select("deal_id")
+          .eq("user_id", user.id),
+        REQUEST_TIMEOUT_MS,
+        "Could not load saved deals.",
+      );
 
-    if (!activeRef.current) return;
+      if (!activeRef.current) return;
 
-    if (queryError) {
-      setError(toErrorMessage(queryError, "Could not load saved deals."));
+      if (queryError) {
+        setError(toErrorMessage(queryError, "Could not load saved deals."));
+        if (loadedForUserRef.current !== user.id) {
+          setSavedIds(new Set());
+        }
+      } else {
+        loadedForUserRef.current = user.id;
+        setError(null);
+        setSavedIds(new Set((data ?? []).map((row) => Number(row.deal_id))));
+      }
+    } catch (caught) {
+      if (!activeRef.current) return;
+      setError(toErrorMessage(caught, "Could not load saved deals."));
       if (loadedForUserRef.current !== user.id) {
         setSavedIds(new Set());
       }
-    } else {
-      loadedForUserRef.current = user.id;
-      setError(null);
-      setSavedIds(new Set((data ?? []).map((row) => Number(row.deal_id))));
+    } finally {
+      if (activeRef.current) setIsLoading(false);
     }
-    setIsLoading(false);
   }, [user]);
 
   useEffect(() => {

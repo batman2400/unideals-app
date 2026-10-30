@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 import type { PartnerDealStats, PartnerDealStatsRow } from "@/types/database";
 import { mapPartnerDealStats } from "@/types/database";
 
@@ -115,52 +116,70 @@ export function usePartnerDealStats(
       if (mode === "initial") setIsLoading(true);
       else setIsRefreshing(true);
 
-      const { data, error: rpcError } = await supabase.rpc(
-        "get_partner_deal_stats",
-        { target_partner_id: partnerId },
-      );
+      try {
+        const { data, error: rpcError } = await withTimeout(
+          supabase.rpc("get_partner_deal_stats", {
+            target_partner_id: partnerId,
+          }),
+          REQUEST_TIMEOUT_MS,
+          "Couldn't load your analytics. Check your connection and try again.",
+        );
 
-      if (!activeRef.current) return;
+        if (!activeRef.current) return;
 
-      if (rpcError) {
-        try {
-          const totals = await loadFallbackTotals(partnerId);
-          if (!activeRef.current) return;
-          setDealStats([]);
-          setFallbackTotals(totals);
-          setError(null);
-          setWarning(
-            "Per-deal analytics aren't available. Showing scan totals only.",
-          );
-        } catch (fallbackError) {
-          if (!activeRef.current) return;
-          setDealStats([]);
-          setFallbackTotals(null);
-          setWarning(null);
-          setError(
-            toErrorMessage(
-              fallbackError,
+        if (rpcError) {
+          try {
+            const totals = await withTimeout(
+              loadFallbackTotals(partnerId),
+              REQUEST_TIMEOUT_MS,
               "Couldn't load your analytics. Check your connection and try again.",
-            ),
-          );
-        } finally {
-          if (activeRef.current) {
-            setIsLoading(false);
-            setIsRefreshing(false);
+            );
+            if (!activeRef.current) return;
+            setDealStats([]);
+            setFallbackTotals(totals);
+            setError(null);
+            setWarning(
+              "Per-deal analytics aren't available. Showing scan totals only.",
+            );
+          } catch (fallbackError) {
+            if (!activeRef.current) return;
+            setDealStats([]);
+            setFallbackTotals(null);
+            setWarning(null);
+            setError(
+              toErrorMessage(
+                fallbackError,
+                "Couldn't load your analytics. Check your connection and try again.",
+              ),
+            );
           }
+          return;
         }
-        return;
-      }
 
-      const mapped = ((data as PartnerDealStatsRow[] | null) ?? []).map(
-        mapPartnerDealStats,
-      );
-      setDealStats(mapped);
-      setFallbackTotals(null);
-      setError(null);
-      setWarning(null);
-      setIsLoading(false);
-      setIsRefreshing(false);
+        const mapped = ((data as PartnerDealStatsRow[] | null) ?? []).map(
+          mapPartnerDealStats,
+        );
+        setDealStats(mapped);
+        setFallbackTotals(null);
+        setError(null);
+        setWarning(null);
+      } catch (caught) {
+        if (!activeRef.current) return;
+        setDealStats([]);
+        setFallbackTotals(null);
+        setWarning(null);
+        setError(
+          toErrorMessage(
+            caught,
+            "Couldn't load your analytics. Check your connection and try again.",
+          ),
+        );
+      } finally {
+        if (activeRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      }
     },
     [partnerId],
   );

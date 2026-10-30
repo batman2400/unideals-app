@@ -33,6 +33,7 @@ import { useDeals } from "@/lib/useDeals";
 import { useEvents } from "@/lib/useEvents";
 import { useStudentPerks } from "@/lib/useStudentPerks";
 import { useSavedDeals } from "@/lib/useSavedDeals";
+import { dealPath, eventPath, perkPath } from "@/lib/routeParams";
 import { floatingTabBarScrollPadding } from "@/lib/tabBar";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 import type { CampusEvent, Deal } from "@/types/database";
@@ -166,7 +167,7 @@ export default function HomeScreen() {
               saved={savedIds.has(item.id)}
               saveDisabled={savedLoading}
               onToggleSave={() => void toggleSave(item.id)}
-              onPress={() => router.push(`/deal/${item.id}` as Href)}
+              onPress={() => router.push(dealPath(item.id))}
             />
           ))}
         </HeroCarousel>
@@ -200,7 +201,7 @@ export default function HomeScreen() {
                   key={perk.id}
                   perk={perk}
                   variant="carousel"
-                  onPress={() => router.push(`/perk/${perk.id}` as Href)}
+                  onPress={() => router.push(perkPath(perk.id))}
                 />
               ))}
             </HeroCarousel>
@@ -229,7 +230,7 @@ export default function HomeScreen() {
             <HeroEventCard
               key={`hero-event-${event.id}`}
               event={event}
-              onPress={() => router.push(`/event/${event.id}` as Href)}
+              onPress={() => router.push(eventPath(event.id))}
             />
           ))}
         </HeroCarousel>
@@ -259,7 +260,7 @@ export default function HomeScreen() {
               saved={savedIds.has(item.id)}
               saveDisabled={savedLoading}
               onToggleSave={() => void toggleSave(item.id)}
-              onPress={() => router.push(`/deal/${item.id}` as Href)}
+              onPress={() => router.push(dealPath(item.id))}
             />
           ))}
         </HeroCarousel>

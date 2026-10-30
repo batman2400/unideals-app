@@ -15,7 +15,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { isExpiredDeal } from "@/lib/eventTiming";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 import { mapDeal, type Deal, type PublicDealRow } from "@/types/database";
+
+const dealsById = new Map<number, Deal>();
+
+/** Keeps list rows so a deal tap can open before the detail request returns. */
+export function rememberDeals(deals: readonly Deal[]): void {
+  for (const deal of deals) {
+    if (Number.isFinite(deal.id)) dealsById.set(deal.id, deal);
+  }
+}
+
+export function rememberedDeal(id: number): Deal | null {
+  return dealsById.get(id) ?? null;
+}
 
 export interface UseDealsResult {
   deals: Deal[];
@@ -45,24 +59,36 @@ export function useDeals(options?: {
       }
       setError(null);
 
-      const { data, error: rpcError } = await supabase.rpc("get_public_deals");
-
-      if (!activeRef.current) return;
-
-      if (rpcError) {
-        setError(toErrorMessage(rpcError, "Could not load deals."));
-      } else {
-        const rows = (data ?? []) as PublicDealRow[];
-        const mapped = rows.map(mapDeal);
-        setDeals(
-          includeExpired
-            ? mapped
-            : mapped.filter((deal) => !isExpiredDeal(deal)),
+      try {
+        const { data, error: rpcError } = await withTimeout(
+          supabase.rpc("get_public_deals"),
+          REQUEST_TIMEOUT_MS,
+          "Could not load deals. Check your connection and try again.",
         );
-      }
 
-      setIsLoading(false);
-      setIsRefreshing(false);
+        if (!activeRef.current) return;
+
+        if (rpcError) {
+          setError(toErrorMessage(rpcError, "Could not load deals."));
+        } else {
+          const rows = (data ?? []) as PublicDealRow[];
+          const mapped = rows.map(mapDeal);
+          rememberDeals(mapped);
+          setDeals(
+            includeExpired
+              ? mapped
+              : mapped.filter((deal) => !isExpiredDeal(deal)),
+          );
+        }
+      } catch (caught) {
+        if (!activeRef.current) return;
+        setError(toErrorMessage(caught, "Could not load deals."));
+      } finally {
+        if (activeRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      }
     },
     [includeExpired],
   );
@@ -134,18 +160,23 @@ export function useSavedDealCatalog(savedIds: Set<number>): UseDealsResult {
     void (async () => {
       const results = await Promise.all(
         ids.map(async (id) => {
-          const { data, error: rpcError } = await supabase.rpc(
-            "get_public_deal_by_id",
-            { target_deal_id: id },
-          );
-          if (rpcError) {
+          try {
+            const { data, error: rpcError } = await withTimeout(
+              supabase.rpc("get_public_deal_by_id", { target_deal_id: id }),
+              REQUEST_TIMEOUT_MS,
+              "Could not load deals. Check your connection and try again.",
+            );
+            if (rpcError) {
+              return { deal: null as Deal | null, failed: true };
+            }
+            const row = (Array.isArray(data) ? data[0] : data) as
+              | PublicDealRow
+              | null
+              | undefined;
+            return { deal: row ? mapDeal(row) : null, failed: false };
+          } catch {
             return { deal: null as Deal | null, failed: true };
           }
-          const row = (Array.isArray(data) ? data[0] : data) as
-            | PublicDealRow
-            | null
-            | undefined;
-          return { deal: row ? mapDeal(row) : null, failed: false };
         }),
       );
 
@@ -158,6 +189,7 @@ export function useSavedDealCatalog(savedIds: Set<number>): UseDealsResult {
         else if (result.failed) failed = true;
       }
 
+      rememberDeals(found);
       setExtraDeals(found);
       setExtraError(
         failed ? "Some saved deals could not be loaded." : null,
@@ -211,17 +243,18 @@ export function useDeal(
   id: string | number | undefined,
   accessKey = "",
 ): UseDealResult {
-  const [deal, setDeal] = useState<Deal | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const parsedOnMount = Number(id);
+  const cachedOnMount = Number.isFinite(parsedOnMount)
+    ? rememberedDeal(parsedOnMount)
+    : null;
+  const [deal, setDeal] = useState<Deal | null>(cachedOnMount);
+  const [isLoading, setIsLoading] = useState(cachedOnMount == null);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const activeRef = useRef(true);
 
   const load = useCallback(async (): Promise<void> => {
     const requestId = ++requestIdRef.current;
-    setIsLoading(true);
-    setError(null);
-
     const parsedId = Number(id);
     if (!Number.isFinite(parsedId)) {
       setDeal(null);
@@ -230,25 +263,52 @@ export function useDeal(
       return;
     }
 
-    const { data, error: rpcError } = await supabase.rpc(
-      "get_public_deal_by_id",
-      { target_deal_id: parsedId },
-    );
-
-    if (!activeRef.current || requestId !== requestIdRef.current) return;
-
-    if (rpcError) {
-      setError(toErrorMessage(rpcError, "Could not load this deal."));
-      setDeal(null);
+    const cached = rememberedDeal(parsedId);
+    if (cached) {
+      setDeal(cached);
+      setError(null);
+      setIsLoading(false);
     } else {
+      setIsLoading(true);
+      setError(null);
+    }
+
+    try {
+      const { data, error: rpcError } = await withTimeout(
+        supabase.rpc("get_public_deal_by_id", { target_deal_id: parsedId }),
+        REQUEST_TIMEOUT_MS,
+        "Opening this deal is taking too long. Check your connection and try again.",
+      );
+
+      if (!activeRef.current || requestId !== requestIdRef.current) return;
+
+      if (rpcError) {
+        if (!rememberedDeal(parsedId)) {
+          setError(toErrorMessage(rpcError, "Could not load this deal."));
+          setDeal(null);
+        }
+        return;
+      }
+
       const row = (Array.isArray(data) ? data[0] : data) as
         | PublicDealRow
         | null
         | undefined;
-      setDeal(row ? mapDeal(row) : null);
+      const next = row ? mapDeal(row) : null;
+      if (next) rememberDeals([next]);
+      setDeal(next);
+      setError(next ? null : "This deal may have expired or been removed.");
+    } catch (caught) {
+      if (!activeRef.current || requestId !== requestIdRef.current) return;
+      if (!rememberedDeal(parsedId)) {
+        setDeal(null);
+        setError(toErrorMessage(caught, "Could not load this deal."));
+      }
+    } finally {
+      if (activeRef.current && requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-
-    setIsLoading(false);
   }, [id]);
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 
 export function isVerificationInFlight(status: string | null | undefined): boolean {
   return status === "pending" || status === "awaiting_confirmation";
@@ -39,36 +40,46 @@ export function useStudentVerificationRequest(
     }
 
     setIsLoading(true);
-    const { data, error: queryError } = await supabase
-      .from("manual_verifications")
-      .select("id, status, method, reject_reason")
-      .eq("user_id", userId)
-      .in("status", ["pending", "awaiting_confirmation", "rejected"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (queryError) {
-      setError(
-        toErrorMessage(queryError, "Could not load your verification status."),
+    try {
+      const { data: rows, error: queryError } = await withTimeout(
+        supabase
+          .from("manual_verifications")
+          .select("id, status, method, reject_reason")
+          .eq("user_id", userId)
+          .in("status", ["pending", "awaiting_confirmation", "rejected"])
+          .order("created_at", { ascending: false })
+          .limit(1),
+        REQUEST_TIMEOUT_MS,
+        "Could not load your verification status.",
       );
-      setIsLoading(false);
-      return;
-    }
 
-    const row = data as VerificationRequestRow | null;
-    setError(null);
-    setRequest(
-      row
-        ? {
-            id: String(row.id),
-            status: row.status,
-            method: row.method ?? null,
-            rejectReason: row.reject_reason ?? null,
-          }
-        : null,
-    );
-    setIsLoading(false);
+      if (queryError) {
+        setError(
+          toErrorMessage(queryError, "Could not load your verification status."),
+        );
+        return;
+      }
+
+      const row = ((Array.isArray(rows) ? rows[0] : rows) ??
+        null) as VerificationRequestRow | null;
+      setError(null);
+      setRequest(
+        row
+          ? {
+              id: String(row.id),
+              status: row.status,
+              method: row.method ?? null,
+              rejectReason: row.reject_reason ?? null,
+            }
+          : null,
+      );
+    } catch (caught) {
+      setError(
+        toErrorMessage(caught, "Could not load your verification status."),
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }, [userId, enabled]);
 
   useEffect(() => {

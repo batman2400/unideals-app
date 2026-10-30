@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { uploadBrandLogo, type UploadBrandLogoInput } from "@/lib/brandLogoUpload";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 import type { Brand, BrandRow } from "@/types/database";
 import { mapBrand } from "@/types/database";
 
@@ -51,22 +52,34 @@ export function useAdminBrands(): UseAdminBrandsResult {
     }
     setError(null);
 
-    const { data, error: fetchError } = await supabase
-      .from("brands")
-      .select("*")
-      .order("name", { ascending: true });
+    try {
+      const { data, error: fetchError } = await withTimeout(
+        supabase
+          .from("brands")
+          .select("*")
+          .order("name", { ascending: true }),
+        REQUEST_TIMEOUT_MS,
+        "Could not load brands. Check your connection and try again.",
+      );
 
-    if (!activeRef.current) return;
+      if (!activeRef.current) return;
 
-    if (fetchError) {
-      setError(toErrorMessage(fetchError, "Could not load brands."));
+      if (fetchError) {
+        setError(toErrorMessage(fetchError, "Could not load brands."));
+        setBrands([]);
+      } else {
+        setBrands(((data ?? []) as BrandRow[]).map(mapBrand));
+      }
+    } catch (caught) {
+      if (!activeRef.current) return;
+      setError(toErrorMessage(caught, "Could not load brands."));
       setBrands([]);
-    } else {
-      setBrands(((data ?? []) as BrandRow[]).map(mapBrand));
+    } finally {
+      if (activeRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
-
-    setIsLoading(false);
-    setIsRefreshing(false);
   }, []);
 
   useEffect(() => {

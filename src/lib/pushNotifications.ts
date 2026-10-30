@@ -14,8 +14,10 @@ import { Platform } from "react-native";
 
 import { withKeychainLock } from "@/lib/keychainLock";
 import { supabase } from "@/lib/supabase";
+import { withTimeout } from "@/lib/withTimeout";
 
 const TOKEN_CACHE_KEY = "unideals.push-token";
+const PUSH_TOKEN_TIMEOUT_MS = 8000;
 export const PUSH_CHANNEL_ID = "deals-events";
 
 export type PushTarget =
@@ -185,8 +187,12 @@ export async function registerStudentPushToken(): Promise<void> {
 
     const projectId = easProjectId();
     const tokenResponse = await withKeychainLock(() =>
-      Notifications.getExpoPushTokenAsync(
-        projectId ? { projectId } : undefined,
+      withTimeout(
+        Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined,
+        ),
+        PUSH_TOKEN_TIMEOUT_MS,
+        "Push token request timed out.",
       ),
     );
     const token = tokenResponse.data;

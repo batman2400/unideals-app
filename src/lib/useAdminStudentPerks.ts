@@ -9,6 +9,7 @@ import {
   type StudentPerkRow,
 } from "@/lib/studentPerks";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 
 export interface StudentPerkInput {
   providerName: string;
@@ -82,30 +83,42 @@ export function useAdminStudentPerks(): UseAdminStudentPerksResult {
     else setIsLoading(true);
     setError(null);
 
-    const { data, error: fetchError } = await supabase
-      .from("student_perks")
-      .select(PERK_SELECT)
-      .order("sort_order", { ascending: true })
-      .order("provider_name", { ascending: true });
+    try {
+      const { data, error: fetchError } = await withTimeout(
+        supabase
+          .from("student_perks")
+          .select(PERK_SELECT)
+          .order("sort_order", { ascending: true })
+          .order("provider_name", { ascending: true }),
+        REQUEST_TIMEOUT_MS,
+        "Couldn't load student perks. Check your connection and try again.",
+      );
 
-    if (!activeRef.current) return;
+      if (!activeRef.current) return;
 
-    if (fetchError) {
-      if (perksSchemaMissing(fetchError)) {
-        setPerks([]);
-        setUnavailable(true);
-        setError(null);
+      if (fetchError) {
+        if (perksSchemaMissing(fetchError)) {
+          setPerks([]);
+          setUnavailable(true);
+          setError(null);
+        } else {
+          setUnavailable(false);
+          setError(toErrorMessage(fetchError, "Couldn't load student perks."));
+        }
       } else {
         setUnavailable(false);
-        setError(toErrorMessage(fetchError, "Couldn't load student perks."));
+        setPerks(((data ?? []) as StudentPerkRow[]).map(mapStudentPerk));
       }
-    } else {
+    } catch (caught) {
+      if (!activeRef.current) return;
       setUnavailable(false);
-      setPerks(((data ?? []) as StudentPerkRow[]).map(mapStudentPerk));
+      setError(toErrorMessage(caught, "Couldn't load student perks."));
+    } finally {
+      if (activeRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
-
-    setIsLoading(false);
-    setIsRefreshing(false);
   }, []);
 
   useEffect(() => {

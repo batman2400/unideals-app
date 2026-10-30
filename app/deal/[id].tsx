@@ -39,6 +39,7 @@ import { useDeal } from "@/lib/useDeals";
 import { usePartnerBrand } from "@/lib/usePartnerBrand";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { useStudentVerificationRequest } from "@/lib/useVerificationRequest";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 import { colors, radius, spacing } from "@/theme";
 import {
   TICKET_URI_PREFIX,
@@ -61,7 +62,7 @@ export default function DealDetailScreen() {
     isVerified ? "verified" : "unverified",
   ].join(":");
 
-  const { deal, isLoading, error } = useDeal(id || undefined, accessKey);
+  const { deal, isLoading, error, refresh } = useDeal(id || undefined, accessKey);
   const { savedIds, isLoading: savedLoading, toggleSave } = useSavedDeals();
   const { brandName } = usePartnerBrand(
     role === "partner" ? user?.id : null,
@@ -87,7 +88,7 @@ export default function DealDetailScreen() {
     Boolean(showVerificationWall && isAuthenticated),
   );
 
-  if (isLoading) {
+  if (isLoading && !deal) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator color={colors.primary} size="large" />
@@ -102,6 +103,13 @@ export default function DealDetailScreen() {
         <Text style={styles.errorBody}>
           {error ?? "This deal may have expired or been removed."}
         </Text>
+        {error ? (
+          <Button
+            label="Try again"
+            onPress={() => void refresh()}
+            variant="secondary"
+          />
+        ) : null}
         <Button label="Back to deals" onPress={() => router.back()} />
       </View>
     );
@@ -315,28 +323,39 @@ function OnlineRedemption({
   const handleReveal = useCallback(async () => {
     setRevealing(true);
     setRevealError(null);
-    const { data, error } = await supabase.rpc("reveal_online_deal_code", {
-      target_deal_id: dealId,
-    });
-    setRevealing(false);
-
-    if (error) {
-      setRevealError(
-        toErrorMessage(error, "Could not reveal this code. Try again."),
+    try {
+      const { data, error } = await withTimeout(
+        supabase.rpc("reveal_online_deal_code", {
+          target_deal_id: dealId,
+        }),
+        REQUEST_TIMEOUT_MS,
+        "Revealing this code is taking too long. Check your connection and try again.",
       );
-      return;
-    }
 
-    const nextCode = parseRevealCode(data);
-    if (!nextCode) {
+      if (error) {
+        setRevealError(
+          toErrorMessage(error, "Could not reveal this code. Try again."),
+        );
+        return;
+      }
+
+      const nextCode = parseRevealCode(data);
+      if (!nextCode) {
+        setRevealError(
+          "This offer does not currently have a valid redemption code.",
+        );
+        return;
+      }
+
+      setRevealedCode(nextCode);
+      setRevealed(true);
+    } catch (caught) {
       setRevealError(
-        "This offer does not currently have a valid redemption code.",
+        toErrorMessage(caught, "Could not reveal this code. Try again."),
       );
-      return;
+    } finally {
+      setRevealing(false);
     }
-
-    setRevealedCode(nextCode);
-    setRevealed(true);
   }, [dealId]);
 
   const handleCopy = useCallback(async () => {
@@ -416,37 +435,42 @@ function InStoreRedemption({ dealId }: { dealId: number }) {
     setError(null);
     setAlreadyRedeemed(false);
 
-    const { data, error: rpcError } = await supabase.rpc(
-      "generate_instore_ticket",
-      {
-        target_deal_id: dealId,
-        ticket_duration_minutes: TICKET_DURATION_MINUTES,
-      },
-    );
+    try {
+      const { data, error: rpcError } = await withTimeout(
+        supabase.rpc("generate_instore_ticket", {
+          target_deal_id: dealId,
+          ticket_duration_minutes: TICKET_DURATION_MINUTES,
+        }),
+        REQUEST_TIMEOUT_MS,
+        "Generating your ticket is taking too long. Check your connection and try again.",
+      );
 
-    if (!activeRef.current) return;
+      if (!activeRef.current) return;
 
-    if (rpcError) {
-      setError(toErrorMessage(rpcError, "Could not generate ticket."));
-      setIsGenerating(false);
-      return;
+      if (rpcError) {
+        setError(toErrorMessage(rpcError, "Could not generate ticket."));
+        return;
+      }
+
+      const row = (data as InstoreTicketRow[] | null)?.[0];
+      if (!row) {
+        setError("Unexpected response from server.");
+        return;
+      }
+
+      setTicketCode(row.ticket_code);
+      const expires = new Date(row.expires_at);
+      setExpiresAt(expires);
+      setAlreadyActive(row.already_active);
+      const remainingMs = Math.max(0, expires.getTime() - Date.now());
+      const fallbackMs = TICKET_DURATION_MINUTES * 60 * 1000;
+      setTicketWindowMs(remainingMs || fallbackMs);
+    } catch (caught) {
+      if (!activeRef.current) return;
+      setError(toErrorMessage(caught, "Could not generate ticket."));
+    } finally {
+      if (activeRef.current) setIsGenerating(false);
     }
-
-    const row = (data as InstoreTicketRow[] | null)?.[0];
-    if (!row) {
-      setError("Unexpected response from server.");
-      setIsGenerating(false);
-      return;
-    }
-
-    setTicketCode(row.ticket_code);
-    const expires = new Date(row.expires_at);
-    setExpiresAt(expires);
-    setAlreadyActive(row.already_active);
-    const remainingMs = Math.max(0, expires.getTime() - Date.now());
-    const fallbackMs = TICKET_DURATION_MINUTES * 60 * 1000;
-    setTicketWindowMs(remainingMs || fallbackMs);
-    setIsGenerating(false);
   }, [dealId]);
 
   useEffect(() => {
@@ -495,13 +519,17 @@ function InStoreRedemption({ dealId }: { dealId: number }) {
       )
       .subscribe();
 
-    const pollId = setInterval(() => {
+      const pollId = setInterval(() => {
       void (async () => {
-        const { data } = await supabase
+        const { data: rows } = await supabase
           .from("student_redemption_tickets")
           .select("redeemed_at")
           .eq("ticket_code", ticketCode)
-          .maybeSingle();
+          .limit(1);
+        const data = (Array.isArray(rows) ? rows[0] : rows) as
+          | { redeemed_at?: string | null }
+          | null
+          | undefined;
 
         if (data?.redeemed_at) {
           setAlreadyRedeemed(true);

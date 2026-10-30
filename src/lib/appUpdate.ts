@@ -4,13 +4,11 @@ import { Platform } from "react-native";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 /**
- * Store-only updates. New releases ship as a Play or App Store build.
- * Over-the-air bundles are disabled in app.json.
+ * Store-version gate. JavaScript fixes can still ship as an over-the-air
+ * bundle. This check only sends people to the store when the installed
+ * binary is older than `app_update_policy.min_store_version`.
  *
- * Set `app_update_policy.min_store_version` when an installed build is too
- * old. The app compares that value with the version baked into the binary
- * and sends those installs to the store. If the policy cannot be reached,
- * the app opens on the build it already has.
+ * If the policy cannot be reached, the app opens on the build it already has.
  */
 
 const ANDROID_STORE_URL =

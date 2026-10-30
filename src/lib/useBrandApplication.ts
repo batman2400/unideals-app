@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 
 export type BrandApplicationStatus =
   | "pending"
@@ -205,8 +206,10 @@ export function useBrandApplication(
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeRef = useRef(true);
+  const requestIdRef = useRef(0);
 
   const load = useCallback(async (): Promise<void> => {
+    const requestId = ++requestIdRef.current;
     if (!userId) {
       setApplication(null);
       setUnavailable(false);
@@ -218,32 +221,51 @@ export function useBrandApplication(
     setIsLoading(true);
     setError(null);
 
-    const { data, error: fetchError } = await supabase
-      .from("brands")
-      .select(APPLICATION_SELECT)
-      .eq("applicant_user_id", userId)
-      .maybeSingle();
+    try {
+      // limit(1) returns an empty list when this account has no application.
+      // maybeSingle asks PostgREST for one object and can stall the screen.
+      const { data, error: fetchError } = await withTimeout(
+        supabase
+          .from("brands")
+          .select(APPLICATION_SELECT)
+          .eq("applicant_user_id", userId)
+          .limit(1),
+        REQUEST_TIMEOUT_MS,
+        "Checking your application is taking too long. You can still fill in the form.",
+      );
 
-    if (!activeRef.current) return;
+      if (!activeRef.current || requestId !== requestIdRef.current) return;
 
-    if (fetchError) {
-      if (applicationsSchemaMissing(fetchError)) {
-        setApplication(null);
-        setUnavailable(true);
-        setError(null);
-      } else {
-        setUnavailable(false);
-        setError(
-          toErrorMessage(fetchError, "Couldn't load your brand application."),
-        );
+      if (fetchError) {
+        if (applicationsSchemaMissing(fetchError)) {
+          setApplication(null);
+          setUnavailable(true);
+          setError(null);
+        } else {
+          setUnavailable(false);
+          setError(
+            toErrorMessage(fetchError, "Couldn't load your brand application."),
+          );
+        }
+        return;
       }
-      setIsLoading(false);
-      return;
-    }
 
-    setUnavailable(false);
-    setApplication(data ? mapApplication(data as BrandApplicationRow) : null);
-    setIsLoading(false);
+      const rows = (
+        Array.isArray(data) ? data : data ? [data] : []
+      ) as BrandApplicationRow[];
+      setUnavailable(false);
+      setApplication(rows[0] ? mapApplication(rows[0]) : null);
+    } catch (caught) {
+      if (!activeRef.current || requestId !== requestIdRef.current) return;
+      setUnavailable(false);
+      setError(
+        toErrorMessage(caught, "Couldn't load your brand application."),
+      );
+    } finally {
+      if (activeRef.current && requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
+    }
   }, [userId]);
 
   useEffect(() => {

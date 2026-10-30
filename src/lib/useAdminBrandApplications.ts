@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { applicationsSchemaMissing } from "@/lib/useBrandApplication";
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 
 export type BrandReviewKind = "application";
 
@@ -113,35 +114,46 @@ export function useAdminBrandApplications(): UseAdminBrandApplicationsResult {
     else setIsLoading(true);
     setError(null);
 
-    const { data, error: fetchError } = await supabase
-      .from("brands")
-      .select(REVIEW_SELECT)
-      .eq("status", "pending")
-      .order("submitted_at", { ascending: false });
+    try {
+      const { data, error: fetchError } = await withTimeout(
+        supabase
+          .from("brands")
+          .select(REVIEW_SELECT)
+          .eq("status", "pending")
+          .order("submitted_at", { ascending: false }),
+        REQUEST_TIMEOUT_MS,
+        "Couldn't load brand applications. Check your connection and try again.",
+      );
 
-    if (!activeRef.current) return;
+      if (!activeRef.current) return;
 
-    if (fetchError) {
-      if (applicationsSchemaMissing(fetchError)) {
-        setItems([]);
-        setUnavailable(true);
-        setError(null);
-      } else {
-        setUnavailable(false);
-        setError(
-          toErrorMessage(fetchError, "Couldn't load brand applications."),
-        );
+      if (fetchError) {
+        if (applicationsSchemaMissing(fetchError)) {
+          setItems([]);
+          setUnavailable(true);
+          setError(null);
+        } else {
+          setUnavailable(false);
+          setError(
+            toErrorMessage(fetchError, "Couldn't load brand applications."),
+          );
+        }
+        return;
       }
-      setIsLoading(false);
-      setIsRefreshing(false);
-      return;
-    }
 
-    const rows = (data ?? []) as ReviewRow[];
-    setUnavailable(false);
-    setItems(rows.flatMap(toItems));
-    setIsLoading(false);
-    setIsRefreshing(false);
+      const rows = (data ?? []) as ReviewRow[];
+      setUnavailable(false);
+      setItems(rows.flatMap(toItems));
+    } catch (caught) {
+      if (!activeRef.current) return;
+      setUnavailable(false);
+      setError(toErrorMessage(caught, "Couldn't load brand applications."));
+    } finally {
+      if (activeRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
   }, []);
 
   useEffect(() => {

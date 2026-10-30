@@ -1,9 +1,17 @@
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { ImagePlus } from "lucide-react-native";
-import { useCallback } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
+import { compressImage } from "@/lib/compressImage";
 import { colors, radius, spacing } from "@/theme";
 
 const DEFAULT_ASPECT: [number, number] = [16, 9];
@@ -31,7 +39,7 @@ export function ImagePickerField({
   value,
   previewUrl,
   onChange,
-  hint = "JPG, PNG, or WEBP · max 5MB",
+  hint = "Large photos are resized automatically",
   aspect = DEFAULT_ASPECT,
   frameHeight = 160,
   shape = "rect",
@@ -39,8 +47,10 @@ export function ImagePickerField({
 }: ImagePickerFieldProps) {
   const displayUri = value?.uri ?? previewUrl ?? null;
   const isCircle = shape === "circle";
+  const [preparing, setPreparing] = useState(false);
 
   const pick = useCallback(async () => {
+    if (preparing) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(
@@ -60,17 +70,37 @@ export function ImagePickerField({
     if (result.canceled || !result.assets[0]) return;
 
     const asset = result.assets[0];
-    if (asset.fileSize != null && asset.fileSize > 5 * 1024 * 1024) {
-      Alert.alert("Image too large", "Please choose an image under 5MB.");
-      return;
+    setPreparing(true);
+    try {
+      const compressed = await compressImage({
+        uri: asset.uri,
+        width: asset.width,
+        height: asset.height,
+        fileSize: asset.fileSize,
+        mimeType: asset.mimeType,
+        maxEdge: isCircle ? 1024 : undefined,
+      });
+      if (compressed.fileSize != null && compressed.fileSize > 5 * 1024 * 1024) {
+        Alert.alert(
+          "Image too large",
+          "That photo is still over 5MB after resizing. Please choose another.",
+        );
+        return;
+      }
+      onChange({
+        uri: compressed.uri,
+        mimeType: compressed.mimeType,
+        fileSize: compressed.fileSize,
+      });
+    } catch {
+      Alert.alert(
+        "Couldn't prepare that image",
+        "Try a different photo. Large pictures are resized before upload.",
+      );
+    } finally {
+      setPreparing(false);
     }
-
-    onChange({
-      uri: asset.uri,
-      mimeType: asset.mimeType ?? null,
-      fileSize: asset.fileSize ?? null,
-    });
-  }, [aspect, onChange]);
+  }, [aspect, isCircle, onChange, preparing]);
 
   return (
     <View style={styles.wrap}>
@@ -86,7 +116,12 @@ export function ImagePickerField({
           pressed && styles.pressed,
         ]}
       >
-        {displayUri ? (
+        {preparing ? (
+          <View style={styles.placeholder}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.placeholderTitle}>Preparing image</Text>
+          </View>
+        ) : displayUri ? (
           <Image source={{ uri: displayUri }} style={styles.preview} contentFit="cover" />
         ) : (
           <View style={styles.placeholder}>

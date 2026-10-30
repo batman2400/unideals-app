@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
@@ -149,14 +149,6 @@ export default function BecomePartnerScreen() {
     websiteUrl,
   ]);
 
-  if (isLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
-  }
-
   if (role === "partner") {
     return (
       <View style={styles.centered}>
@@ -203,6 +195,10 @@ export default function BecomePartnerScreen() {
         Tell us who you are and how to confirm the brand. We review every
         application. Your account stays a student until it is approved.
       </Text>
+
+      {isLoading ? (
+        <Text style={styles.hint}>Checking for an existing application…</Text>
+      ) : null}
 
       {unavailable ? (
         <Text style={styles.banner}>

@@ -23,7 +23,7 @@ import {
   useTabBarMotion,
 } from "@/context/TabBarMotionContext";
 import { partitionDeals } from "@/lib/eventTiming";
-import { asScheduleParam } from "@/lib/routeParams";
+import { asScheduleParam, dealPath, perkPath } from "@/lib/routeParams";
 import { useDeals } from "@/lib/useDeals";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { PERK_CATEGORIES } from "@/lib/studentPerks";
@@ -242,7 +242,7 @@ export default function DealsScreen() {
             renderItem={({ item }) => (
               <PerkCard
                 perk={item}
-                onPress={() => router.push(`/perk/${item.id}` as Href)}
+                onPress={() => router.push(perkPath(item.id))}
               />
             )}
             ListHeaderComponent={
@@ -301,7 +301,7 @@ export default function DealsScreen() {
               saved={savedIds.has(item.id)}
               saveDisabled={savedLoading}
               onToggleSave={toggleSave}
-              onPress={(deal) => router.push(`/deal/${deal.id}` as Href)}
+              onPress={(deal) => router.push(dealPath(deal.id))}
             />
           )}
           ListHeaderComponent={

@@ -14,7 +14,7 @@ import { DealCard } from "@/components/DealCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { slugify } from "@/lib/brandPath";
 import { partitionDeals } from "@/lib/eventTiming";
-import { asRouteId } from "@/lib/routeParams";
+import { asRouteId, dealPath } from "@/lib/routeParams";
 import { useDeals } from "@/lib/useDeals";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { colors, spacing } from "@/theme";
@@ -90,7 +90,7 @@ export default function BrandHubScreen() {
               saved={savedIds.has(deal.id)}
               saveDisabled={savedLoading}
               onToggleSave={toggleSave}
-              onPress={(item) => router.push(`/deal/${item.id}` as Href)}
+              onPress={(item) => router.push(dealPath(item.id))}
             />
           ))}
           {comingSoon.length > 0 ? (
@@ -103,7 +103,7 @@ export default function BrandHubScreen() {
                   saved={savedIds.has(deal.id)}
                   saveDisabled={savedLoading}
                   onToggleSave={toggleSave}
-                  onPress={(item) => router.push(`/deal/${item.id}` as Href)}
+                  onPress={(item) => router.push(dealPath(item.id))}
                 />
               ))}
             </>

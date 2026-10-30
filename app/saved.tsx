@@ -12,6 +12,7 @@ import {
 
 import { Button } from "@/components/Button";
 import { DealCard } from "@/components/DealCard";
+import { dealPath } from "@/lib/routeParams";
 import { useSavedDealCatalog } from "@/lib/useDeals";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { colors, spacing } from "@/theme";
@@ -59,7 +60,7 @@ export default function SavedDealsScreen() {
               saved={savedIds.has(item.id)}
               saveDisabled={savedLoading}
               onToggleSave={toggleSave}
-              onPress={(deal) => router.push(`/deal/${deal.id}` as Href)}
+              onPress={(deal) => router.push(dealPath(deal.id))}
             />
           )}
           ListHeaderComponent={

@@ -26,10 +26,10 @@ export default function PerkDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const perkId = Array.isArray(id) ? id[0] : id;
-  const { perk, isLoading, error } = useStudentPerk(perkId);
+  const { perk, isLoading, error, refresh } = useStudentPerk(perkId);
   const [linkError, setLinkError] = useState<string | null>(null);
 
-  if (isLoading) {
+  if (isLoading && !perk) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator color={colors.primary} size="large" />
@@ -42,6 +42,13 @@ export default function PerkDetailScreen() {
       <View style={styles.centered}>
         <Text style={styles.title}>Perk unavailable</Text>
         <Text style={styles.body}>{error ?? "This perk may have been removed."}</Text>
+        {error ? (
+          <Button
+            label="Try again"
+            onPress={() => void refresh()}
+            variant="secondary"
+          />
+        ) : null}
         <Button label="Back" onPress={() => router.back()} />
       </View>
     );

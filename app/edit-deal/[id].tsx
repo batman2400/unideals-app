@@ -175,81 +175,92 @@ export default function EditDealScreen() {
       setIsLoading(true);
       setError(null);
 
-      let query = supabase
-        .from("deals")
-        .select(
-          "id, title, brand, discount, type, category, image_url, description, redemption_code, store_url, location_name, location_address, start_time, end_time, show_start_date, show_end_date",
-        )
-        .eq("id", dealId);
+      try {
+        let query = supabase
+          .from("deals")
+          .select(
+            "id, title, brand, discount, type, category, image_url, description, redemption_code, store_url, location_name, location_address, start_time, end_time, show_start_date, show_end_date",
+          )
+          .eq("id", dealId);
 
-      query = brandId
-        ? query.or(`brand_id.eq.${brandId},partner_id.eq.${user.id}`)
-        : query.eq("partner_id", user.id);
+        query = brandId
+          ? query.or(`brand_id.eq.${brandId},partner_id.eq.${user.id}`)
+          : query.eq("partner_id", user.id);
 
-      const { data, error: fetchError } = await query.maybeSingle();
+        const { data: rows, error: fetchError } = await withTimeout(
+          query.limit(1),
+          SAVE_TIMEOUT_MS,
+          "Loading this offer is taking too long. Check your connection and try again.",
+        );
+        const data = (Array.isArray(rows) ? rows[0] : rows) ?? null;
 
-      if (!active) return;
+        if (!active) return;
 
-      if (fetchError) {
-        setError(toErrorMessage(fetchError, "Failed to load offer."));
+        if (fetchError) {
+          setError(toErrorMessage(fetchError, "Failed to load offer."));
+          setIsLoading(false);
+          return;
+        }
+
+        if (!data) {
+          setError("Offer not found or you do not have access to edit it.");
+          setIsLoading(false);
+          return;
+        }
+
+        const parsed = parseOfferLabel(String(data.discount ?? ""));
+        const start = isoToDate(data.start_time as string | null);
+        const end = isoToDate(data.end_time as string | null);
+        const nextTitle = String(data.title ?? "");
+        const nextDescription = String(data.description ?? "");
+        const nextCategory = asDealCategory(data.category as string | null);
+        const nextType = asDealType(data.type as string | null);
+        const nextCode = String(data.redemption_code ?? "").toUpperCase();
+        const nextStoreUrl = String(data.store_url ?? "");
+        const nextLocationName = String(data.location_name ?? "");
+        const nextLocationAddress = String(data.location_address ?? "");
+        const nextShowStart = Boolean(data.show_start_date);
+        const nextShowEnd = Boolean(data.show_end_date);
+
+        setTitle(nextTitle);
+        setDescription(nextDescription);
+        setCategory(nextCategory);
+        setDealType(nextType);
+        setOfferType(parsed.offerType);
+        setOfferValue(parsed.offerValue);
+        setRedemptionCode(nextCode);
+        setImageUrl(String(data.image_url ?? ""));
+        setStoreUrl(nextStoreUrl);
+        setLocationName(nextLocationName);
+        setLocationAddress(nextLocationAddress);
+        setStartAt(start);
+        setEndAt(end);
+        setShowStartDate(nextShowStart);
+        setShowEndDate(nextShowEnd);
+        baselineRef.current = JSON.stringify({
+          title: nextTitle,
+          description: nextDescription,
+          category: nextCategory,
+          dealType: nextType,
+          offerType: parsed.offerType,
+          offerValue: parsed.offerValue,
+          redemptionCode: nextCode,
+          storeUrl: nextStoreUrl,
+          locationName: nextLocationName,
+          locationAddress: nextLocationAddress,
+          startAt: start?.getTime() ?? null,
+          endAt: end?.getTime() ?? null,
+          showStartDate: nextShowStart,
+          showEndDate: nextShowEnd,
+          imageUri: "",
+        });
+        setHydrated(true);
         setIsLoading(false);
-        return;
-      }
-
-      if (!data) {
-        setError("Offer not found or you do not have access to edit it.");
+      } catch (caught) {
+        if (!active) return;
+        setError(toErrorMessage(caught, "Failed to load offer."));
         setIsLoading(false);
-        return;
       }
-
-      const parsed = parseOfferLabel(String(data.discount ?? ""));
-      const start = isoToDate(data.start_time as string | null);
-      const end = isoToDate(data.end_time as string | null);
-      const nextTitle = String(data.title ?? "");
-      const nextDescription = String(data.description ?? "");
-      const nextCategory = asDealCategory(data.category as string | null);
-      const nextType = asDealType(data.type as string | null);
-      const nextCode = String(data.redemption_code ?? "").toUpperCase();
-      const nextStoreUrl = String(data.store_url ?? "");
-      const nextLocationName = String(data.location_name ?? "");
-      const nextLocationAddress = String(data.location_address ?? "");
-      const nextShowStart = Boolean(data.show_start_date);
-      const nextShowEnd = Boolean(data.show_end_date);
-
-      setTitle(nextTitle);
-      setDescription(nextDescription);
-      setCategory(nextCategory);
-      setDealType(nextType);
-      setOfferType(parsed.offerType);
-      setOfferValue(parsed.offerValue);
-      setRedemptionCode(nextCode);
-      setImageUrl(String(data.image_url ?? ""));
-      setStoreUrl(nextStoreUrl);
-      setLocationName(nextLocationName);
-      setLocationAddress(nextLocationAddress);
-      setStartAt(start);
-      setEndAt(end);
-      setShowStartDate(nextShowStart);
-      setShowEndDate(nextShowEnd);
-      baselineRef.current = JSON.stringify({
-        title: nextTitle,
-        description: nextDescription,
-        category: nextCategory,
-        dealType: nextType,
-        offerType: parsed.offerType,
-        offerValue: parsed.offerValue,
-        redemptionCode: nextCode,
-        storeUrl: nextStoreUrl,
-        locationName: nextLocationName,
-        locationAddress: nextLocationAddress,
-        startAt: start?.getTime() ?? null,
-        endAt: end?.getTime() ?? null,
-        showStartDate: nextShowStart,
-        showEndDate: nextShowEnd,
-        imageUri: "",
-      });
-      setHydrated(true);
-      setIsLoading(false);
     }
 
     void loadDeal();

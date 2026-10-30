@@ -43,7 +43,7 @@ export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const { event, isLoading, error, refresh } = useEvent(id);
 
-  if (isLoading) {
+  if (isLoading && !event) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator color={colors.primary} size="large" />

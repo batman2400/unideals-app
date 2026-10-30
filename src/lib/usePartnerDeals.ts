@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase, toErrorMessage } from "@/lib/supabase";
+import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
 import type { DealType, PartnerDeal, PartnerDealRow } from "@/types/database";
 import { mapPartnerDeal } from "@/types/database";
 
@@ -114,39 +115,51 @@ export function usePartnerDeals(
       }
       setError(null);
 
-      let query = supabase.from("deals").select(PARTNER_DEAL_COLUMNS);
+      try {
+        let query = supabase.from("deals").select(PARTNER_DEAL_COLUMNS);
 
-      if (brandId && partnerId) {
-        query = query.or(`brand_id.eq.${brandId},partner_id.eq.${partnerId}`);
-      } else if (brandId) {
-        query = query.eq("brand_id", brandId);
-      } else if (partnerId) {
-        query = query.eq("partner_id", partnerId);
-      }
+        if (brandId && partnerId) {
+          query = query.or(`brand_id.eq.${brandId},partner_id.eq.${partnerId}`);
+        } else if (brandId) {
+          query = query.eq("brand_id", brandId);
+        } else if (partnerId) {
+          query = query.eq("partner_id", partnerId);
+        }
 
-      const { data, error: queryError } = await query.order("created_at", {
-        ascending: false,
-      });
-
-      if (!activeRef.current) return;
-
-      if (queryError) {
-        setError(toErrorMessage(queryError, "Could not load your deals."));
-        setDeals([]);
-      } else {
-        const rows = (data ?? []) as PartnerDealRow[];
-        setDeals(
-          rows.map((row) =>
-            mapPartnerDeal({
-              ...row,
-              type: row.type as DealType,
-            }),
-          ),
+        const { data, error: queryError } = await withTimeout(
+          query.order("created_at", {
+            ascending: false,
+          }),
+          REQUEST_TIMEOUT_MS,
+          "Could not load your deals. Check your connection and try again.",
         );
-      }
 
-      setIsLoading(false);
-      setIsRefreshing(false);
+        if (!activeRef.current) return;
+
+        if (queryError) {
+          setError(toErrorMessage(queryError, "Could not load your deals."));
+          setDeals([]);
+        } else {
+          const rows = (data ?? []) as PartnerDealRow[];
+          setDeals(
+            rows.map((row) =>
+              mapPartnerDeal({
+                ...row,
+                type: row.type as DealType,
+              }),
+            ),
+          );
+        }
+      } catch (caught) {
+        if (!activeRef.current) return;
+        setError(toErrorMessage(caught, "Could not load your deals."));
+        setDeals([]);
+      } finally {
+        if (activeRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      }
     },
     [brandId, partnerId],
   );

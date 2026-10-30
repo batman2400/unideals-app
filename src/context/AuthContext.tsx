@@ -61,8 +61,19 @@ import {
   subscribeToPushTokenRefresh,
   unregisterDevicePushToken,
 } from "@/lib/pushNotifications";
-import { supabase, toErrorMessage } from "@/lib/supabase";
+import {
+  abortInFlightRequests,
+  clearPersistedSession,
+  subscribeToAppResume,
+  supabase,
+  toErrorMessage,
+} from "@/lib/supabase";
+import { withTimeout } from "@/lib/withTimeout";
 import { isUserRole, type UserMetadata, type UserRole } from "@/types/database";
+
+const PUSH_UNREGISTER_TIMEOUT_MS = 4_000;
+const SIGN_OUT_TIMEOUT_MS = 8_000;
+const SIGN_OUT_CLEANUP_TIMEOUT_MS = 6_000;
 
 interface UserRoleLookup {
   role: UserRole | null;
@@ -145,6 +156,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resolvedForUserIdRef = useRef<string | null>(null);
   const sessionUserIdRef = useRef<string | null>(null);
+  /**
+   * Set when sign-out gives up on the network and clears the device itself.
+   * A token refresh that was already in flight can otherwise finish afterwards
+   * and sign the user back in.
+   */
+  const ignoreSessionRestoreRef = useRef(false);
   const roleRequestIdRef = useRef(0);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const channelUserIdRef = useRef<string | null>(null);
@@ -179,11 +196,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: string,
       includeVerifiedAt: boolean,
     ) => {
-      return supabase
+      const { data: rows, error } = await supabase
         .from("user_roles")
         .select(includeVerifiedAt ? "role, is_verified, verified_at" : "role, is_verified")
         .eq("user_id", userId)
-        .maybeSingle<UserRoleLookup>();
+        .limit(1);
+      const data = ((Array.isArray(rows) ? rows[0] : rows) ??
+        null) as UserRoleLookup | null;
+      return { data, error };
     };
 
     const readRole = async (
@@ -347,6 +367,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ): Promise<void> => {
       if (!active) return;
 
+      if (ignoreSessionRestoreRef.current && nextSession) {
+        clearPersistedSession();
+        return;
+      }
+      if (!nextSession) {
+        ignoreSessionRestoreRef.current = false;
+      }
+
       const nextUserId = nextSession?.user?.id ?? null;
       sessionUserIdRef.current = nextUserId;
       setSession(nextSession);
@@ -458,8 +486,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (userId) fetchRoleRef.current(userId);
   }, []);
 
+  useEffect(() => subscribeToAppResume(refreshRole), [refreshRole]);
+
   const signIn = useCallback(
     async (email: string, password: string): Promise<AuthResult> => {
+      ignoreSessionRestoreRef.current = false;
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
@@ -480,6 +511,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string,
       details: SignUpDetails,
     ): Promise<AuthResult> => {
+      ignoreSessionRestoreRef.current = false;
       const { error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
@@ -502,25 +534,97 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signInWithApple = useCallback(async (): Promise<AuthResult> => {
+    ignoreSessionRestoreRef.current = false;
     return startAppleSignIn();
   }, []);
 
   const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
+    ignoreSessionRestoreRef.current = false;
     return startGoogleSignIn();
   }, []);
 
-  const signOut = useCallback(async (): Promise<AuthResult> => {
-    await unregisterDevicePushToken();
-    const { error: signOutError } = await supabase.auth.signOut();
+  const dropLocalSession = useCallback(() => {
+    ignoreSessionRestoreRef.current = true;
+    sessionUserIdRef.current = null;
+    roleRequestIdRef.current += 1;
+    clearPersistedSession();
+    setSession(null);
+    setRole(null);
+    setIsVerified(false);
+    setVerifiedAt(null);
+    setError(null);
     setIsPasswordRecovery(false);
+    setIsLoading(false);
+    void clearCachedUserRole();
     void clearPasswordRecoveryUser();
-
-    return {
-      error: signOutError
-        ? toErrorMessage(signOutError, "Unable to sign out.")
-        : null,
-    };
   }, []);
+
+  const signOut = useCallback(async (): Promise<AuthResult> => {
+    // Push removal needs the session. Cap it so a request stuck after the
+    // app was backgrounded cannot hold the sign-out button on "Signing out…".
+    await withTimeout(
+      unregisterDevicePushToken(),
+      PUSH_UNREGISTER_TIMEOUT_MS,
+      "Push token removal timed out.",
+    ).catch((error: unknown) => {
+      console.warn("[auth] Push token removal skipped:", error);
+      abortInFlightRequests();
+    });
+
+    const pending = supabase.auth.signOut();
+
+    const settled = async (signOutError: { message?: string } | null): Promise<AuthResult> => {
+      setIsPasswordRecovery(false);
+      void clearPasswordRecoveryUser();
+      if (!signOutError) return { error: null };
+
+      const stillSignedIn = await withTimeout(
+        supabase.auth.getSession(),
+        2_000,
+        "Session check timed out.",
+      ).catch(() => null);
+      if (!stillSignedIn) {
+        dropLocalSession();
+        return { error: null };
+      }
+      if (!stillSignedIn.data.session) return { error: null };
+
+      return {
+        error: toErrorMessage(signOutError, "Unable to sign out."),
+      };
+    };
+
+    try {
+      const { error: signOutError } = await withTimeout(
+        pending,
+        SIGN_OUT_TIMEOUT_MS,
+        "Sign out timed out.",
+      );
+      return settled(signOutError);
+    } catch (caught) {
+      console.warn(
+        "[auth] Sign out did not finish. Cancelling it and clearing the local session.",
+        caught,
+      );
+      abortInFlightRequests();
+      try {
+        const { error: signOutError } = await withTimeout(
+          pending,
+          SIGN_OUT_CLEANUP_TIMEOUT_MS,
+          "Sign out cleanup timed out.",
+        );
+        return settled(signOutError);
+      } catch (cleanupError) {
+        console.warn(
+          "[auth] Local session cleared without a server response.",
+          cleanupError,
+        );
+        abortInFlightRequests();
+        dropLocalSession();
+        return { error: null };
+      }
+    }
+  }, [dropLocalSession]);
 
   const resetPassword = useCallback(
     async (email: string): Promise<AuthResult> => {

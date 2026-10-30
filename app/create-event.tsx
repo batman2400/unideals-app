@@ -29,6 +29,10 @@ import { supabase, toErrorMessage } from "@/lib/supabase";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
 import { colors, radius, spacing } from "@/theme";
 import {
+  IMAGE_UPLOAD_TIMEOUT_MESSAGE,
+  IMAGE_UPLOAD_TIMEOUT_MS,
+} from "@/lib/withTimeout";
+import {
   EVENT_AUDIENCE_OPTIONS,
   EVENT_CATEGORY_OPTIONS,
   type EventAudience,
@@ -220,9 +224,13 @@ export default function CreateEventScreen() {
               mimeType: image.mimeType,
               fileSize: image.fileSize,
             }),
+            IMAGE_UPLOAD_TIMEOUT_MS,
           );
           coverImageUrl = uploaded.publicUrl;
         } catch (uploadErr) {
+          if (uploadErr instanceof SubmitTimeoutError) {
+            throw new Error(IMAGE_UPLOAD_TIMEOUT_MESSAGE);
+          }
           const uploadMessage = toErrorMessage(
             uploadErr,
             "Could not upload cover image.",
