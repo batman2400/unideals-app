@@ -171,6 +171,7 @@ export function clearPersistedSession(): void {
 
 let wasBackgrounded = false;
 const resumeListeners = new Set<() => void>();
+const realtimeReadyListeners = new Set<() => void>();
 
 /** Runs after the app returns from a real background and the dead socket is dropped. */
 export function subscribeToAppResume(listener: () => void): () => void {
@@ -178,6 +179,30 @@ export function subscribeToAppResume(listener: () => void): () => void {
   return () => {
     resumeListeners.delete(listener);
   };
+}
+
+/** Runs after the live connection has been closed and opened again. */
+export function subscribeToRealtimeReady(listener: () => void): () => void {
+  realtimeReadyListeners.add(listener);
+  return () => {
+    realtimeReadyListeners.delete(listener);
+  };
+}
+
+async function reconnectRealtime(): Promise<void> {
+  try {
+    await supabase.realtime.disconnect();
+  } catch (error) {
+    console.warn("[supabase] Realtime disconnect skipped:", error);
+  }
+
+  try {
+    supabase.realtime.connect();
+  } catch (error) {
+    console.warn("[supabase] Realtime reconnect skipped:", error);
+  }
+
+  for (const listener of realtimeReadyListeners) listener();
 }
 
 /**
@@ -220,6 +245,7 @@ function handleAppStateChange(state: AppStateStatus): void {
     void drainStaleConnection().finally(() => {
       void supabase.auth.startAutoRefresh();
       for (const listener of resumeListeners) listener();
+      void reconnectRealtime();
     });
     return;
   }

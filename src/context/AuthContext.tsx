@@ -65,6 +65,7 @@ import {
   abortInFlightRequests,
   clearPersistedSession,
   subscribeToAppResume,
+  subscribeToRealtimeReady,
   supabase,
   toErrorMessage,
 } from "@/lib/supabase";
@@ -166,6 +167,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const channelUserIdRef = useRef<string | null>(null);
   const fetchRoleRef = useRef<(userId: string) => void>(() => {});
+  const reattachRoleChannelRef = useRef<(userId: string | null) => void>(
+    () => {},
+  );
 
   useEffect(() => {
     let active = true;
@@ -360,6 +364,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       channelUserIdRef.current = userId;
     };
 
+    reattachRoleChannelRef.current = (nextUserId: string | null): void => {
+      if (!active || ignoreSessionRestoreRef.current) return;
+      detachRoleChannel();
+      attachRoleChannel(nextUserId);
+    };
+
     const applySession = async (
       nextSession: Session | null,
       refreshRoleFromNetwork: boolean,
@@ -487,6 +497,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => subscribeToAppResume(refreshRole), [refreshRole]);
+
+  useEffect(
+    () =>
+      subscribeToRealtimeReady(() => {
+        if (ignoreSessionRestoreRef.current) return;
+        reattachRoleChannelRef.current(sessionUserIdRef.current);
+      }),
+    [],
+  );
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<AuthResult> => {

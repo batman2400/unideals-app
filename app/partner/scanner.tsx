@@ -51,6 +51,8 @@ export default function PartnerScannerScreen() {
 
   const lastScanAtRef = useRef(0);
   const verifyingRef = useRef(false);
+  const screenFocusedRef = useRef(false);
+  const resumeCameraRef = useRef(false);
 
   const validate = useCallback(
     async (payload: string, method: "camera" | "manual") => {
@@ -121,7 +123,10 @@ export default function PartnerScannerScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      screenFocusedRef.current = true;
       return () => {
+        screenFocusedRef.current = false;
+        resumeCameraRef.current = false;
         setIsCameraOpen(false);
       };
     }, []),
@@ -129,7 +134,18 @@ export default function PartnerScannerScreen() {
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {
-      if (next !== "active") setIsCameraOpen(false);
+      if (next === "active") {
+        if (resumeCameraRef.current && screenFocusedRef.current) {
+          resumeCameraRef.current = false;
+          setIsCameraOpen(true);
+        }
+        return;
+      }
+
+      setIsCameraOpen((open) => {
+        if (open) resumeCameraRef.current = true;
+        return false;
+      });
     });
     return () => sub.remove();
   }, []);
