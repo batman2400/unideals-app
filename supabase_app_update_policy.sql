@@ -1,20 +1,22 @@
--- Release policy the mobile app reads on launch and when it returns to the foreground.
--- Run once in the Supabase SQL editor.
+-- Store-update gate. The app reads this row on launch and when it returns
+-- to the foreground. Paste this whole file into the Supabase SQL editor and run it.
+-- It is safe to run more than once. It does not lock anyone out.
 --
--- Routine EAS updates stay on force_ota = false. The app downloads them in the
--- background and applies them the next time it is opened from scratch.
+-- The installed app compares its own version with min_store_version.
+-- Older installs see "Update Uni Deals" and cannot continue until they
+-- install from the store. If this row cannot be read, the app opens anyway.
 --
--- Mandatory JS update (old bundle would break):
---   1. Publish the bundle with `npm run update:production` (or update:preview).
---   2. update public.app_update_policy
---        set force_ota = true, updated_at = now()
---        where id = 1;
---   3. After people have reloaded onto it, set force_ota back to false.
+-- Do not raise min_store_version until that exact version is live on both
+-- the App Store and Play Store. The builds in the stores today are
+-- Android 1.0.1 and iPhone 1.0.2, and neither includes the latest fixes.
+-- Setting a higher minimum before the new build is listed locks people out
+-- with nothing to install.
 --
--- Native binary is too old for an over-the-air bundle. min_store_version is the
--- runtime version baked into the build (app.json "version" at build time):
+-- After the new build is live on both stores, run only this, using the
+-- version that is actually listed (change 1.0.3 if you shipped a different one):
+--
 --   update public.app_update_policy
---     set min_store_version = '1.1.0', updated_at = now()
+--     set min_store_version = '1.0.3', updated_at = now()
 --     where id = 1;
 
 create table if not exists public.app_update_policy (
@@ -39,3 +41,7 @@ create policy "Anyone can read the app update policy"
   for select
   to anon, authenticated
   using (true);
+
+select id, min_store_version, force_ota, updated_at
+from public.app_update_policy
+where id = 1;
