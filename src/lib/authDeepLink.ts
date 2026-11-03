@@ -7,7 +7,12 @@
  */
 import * as Linking from "expo-linking";
 
-import { supabase, toErrorMessage } from "@/lib/supabase";
+import {
+  isConnectionDroppedError,
+  supabase,
+  toErrorMessage,
+  waitForForegroundConnection,
+} from "@/lib/supabase";
 
 export interface AuthDeepLinkResult {
   handled: boolean;
@@ -18,7 +23,34 @@ export interface AuthDeepLinkResult {
 
 /** PKCE codes can only be exchanged once; Linking + AuthSession both fire. */
 let lastConsumedCode: string | null = null;
+let lastRecoveryUrl: string | null = null;
 const inFlightExchanges = new Map<string, Promise<AuthDeepLinkResult>>();
+
+/**
+ * The reset link arrives while the app is coming back from Mail. Wait until
+ * that resume has dropped the dead socket, and retry once if this resume
+ * still cancelled the exchange.
+ */
+async function whenConnectionReady<T>(run: () => Promise<T>): Promise<T> {
+  await waitForForegroundConnection();
+  try {
+    const result = await run();
+    if (!hasConnectionDropped(result)) return result;
+  } catch (caught) {
+    if (!isConnectionDroppedError(caught)) throw caught;
+  }
+  await waitForForegroundConnection();
+  return run();
+}
+
+function hasConnectionDropped(result: unknown): boolean {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "error" in result &&
+    isConnectionDroppedError((result as { error: unknown }).error)
+  );
+}
 
 function parseParams(url: string): Record<string, string> {
   const params: Record<string, string> = {};
@@ -81,6 +113,7 @@ export async function handleAuthDeepLink(
   const params = parseParams(url);
   const type = params.type ?? null;
   const isRecovery = isRecoveryContext(url, type);
+  if (isRecovery) lastRecoveryUrl = url;
 
   if (params.error || params.error_code) {
     return {
@@ -110,7 +143,9 @@ export async function handleAuthDeepLink(
 
       const exchange = (async (): Promise<AuthDeepLinkResult> => {
         try {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          const { error } = await whenConnectionReady(() =>
+            supabase.auth.exchangeCodeForSession(code),
+          );
           if (error) {
             const { data: existing } = await supabase.auth.getSession();
             if (existing.session) {
@@ -149,11 +184,15 @@ export async function handleAuthDeepLink(
       return exchange;
     }
 
-    if (params.access_token && params.refresh_token) {
-      const { error } = await supabase.auth.setSession({
-        access_token: params.access_token,
-        refresh_token: params.refresh_token,
-      });
+    const accessToken = params.access_token;
+    const refreshToken = params.refresh_token;
+    if (accessToken && refreshToken) {
+      const { error } = await whenConnectionReady(() =>
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }),
+      );
 
       if (error) {
         return {
@@ -181,6 +220,11 @@ export async function handleAuthDeepLink(
   }
 
   return { handled: false, type, error: null, isRecovery };
+}
+
+/** Runs the last reset link again after "Your connection dropped." */
+export function retryLastAuthDeepLink(): Promise<AuthDeepLinkResult> {
+  return handleAuthDeepLink(lastRecoveryUrl);
 }
 
 /** Canonical redirect target for password-reset emails. */
