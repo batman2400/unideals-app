@@ -19,6 +19,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Constants from "expo-constants";
 import { AppState, type AppStateStatus } from "react-native";
 
+import { RequestResume } from "@/lib/requestResume";
 import { getAuthStorage } from "@/lib/secureAuthStorage";
 
 /**
@@ -26,27 +27,54 @@ import { getAuthStorage } from "@/lib/secureAuthStorage";
  * dead socket and never settle. Callers wait on that promise, and a token
  * refresh stuck this way blocks every later request. Cancelling rejects the
  * wrapper even when the native fetch ignores the abort.
+ *
+ * Only those already-open requests are cancelled. The password-reset link is
+ * delivered in the same resume, and cancelling that exchange is what showed
+ * "Your connection dropped" instead of the new-password form.
  */
+const CONNECTION_DROPPED_MESSAGE = "Your connection dropped. Try again.";
+
 type InFlightRequest = {
+  stale: boolean;
   controller: AbortController;
   fail: (error: Error) => void;
 };
 
-const inFlightRequests = new Set<InFlightRequest>();
+const requestResume = new RequestResume<InFlightRequest>();
 
 function connectionDroppedError(): Error {
-  const error = new Error("Your connection dropped. Try again.");
+  const error = new Error(CONNECTION_DROPPED_MESSAGE);
   error.name = "AbortError";
   return error;
 }
 
-export function abortInFlightRequests(): void {
-  const pending = [...inFlightRequests];
-  inFlightRequests.clear();
-  for (const request of pending) {
-    request.controller.abort();
+export function isConnectionDroppedError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof (error as { message: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "";
+  return message.includes(CONNECTION_DROPPED_MESSAGE);
+}
+
+function failRequests(requests: readonly InFlightRequest[]): void {
+  for (const request of requests) {
     request.fail(connectionDroppedError());
+    request.controller.abort();
   }
+}
+
+export function abortInFlightRequests(): void {
+  failRequests(requestResume.abortAll());
+}
+
+/** Waits out a resume so a deep-link exchange is not sent on a dead socket. */
+export function waitForForegroundConnection(): Promise<void> {
+  return requestResume.wait();
 }
 
 function trackedFetch(
@@ -65,6 +93,7 @@ function trackedFetch(
   }
 
   const request: InFlightRequest = {
+    stale: false,
     controller,
     fail: () => undefined,
   };
@@ -74,7 +103,7 @@ function trackedFetch(
     const finish = (settle: () => void) => {
       if (settled) return;
       settled = true;
-      inFlightRequests.delete(request);
+      requestResume.remove(request);
       settle();
     };
 
@@ -82,7 +111,7 @@ function trackedFetch(
       finish(() => reject(error));
     };
 
-    inFlightRequests.add(request);
+    requestResume.add(request);
     try {
       fetch(input, { ...init, signal: controller.signal }).then(
         (response) => {
@@ -169,7 +198,6 @@ export function clearPersistedSession(): void {
   void storage.removeItem(`${authStorageKey}-code-verifier`);
 }
 
-let wasBackgrounded = false;
 const resumeListeners = new Set<() => void>();
 const realtimeReadyListeners = new Set<() => void>();
 
@@ -229,20 +257,22 @@ function handleAppStateChange(state: AppStateStatus): void {
 
   // `inactive` is the notification shade, Face ID, and the app switcher.
   // Only a real background should drop in-flight work.
-  if (state === "background") {
-    wasBackgrounded = true;
+  const decision = requestResume.onAppState(state);
+
+  if (decision.kind === "background") {
     void supabase.auth.stopAutoRefresh();
     return;
   }
 
-  if (state !== "active") return;
-
-  if (wasBackgrounded) {
-    wasBackgrounded = false;
-    abortInFlightRequests();
+  if (decision.kind === "resume") {
+    failRequests(decision.abort);
+    const token = decision.token;
     // Wait until the dead socket is dropped before refreshing the session.
     // Starting that refresh in parallel can stick it on the same socket.
+    // Deep-link exchanges wait on the same gate, so the reset email is not
+    // cancelled or sent while that socket is still the one in the pool.
     void drainStaleConnection().finally(() => {
+      if (!requestResume.settled(token)) return;
       void supabase.auth.startAutoRefresh();
       for (const listener of resumeListeners) listener();
       void reconnectRealtime();
@@ -250,7 +280,9 @@ function handleAppStateChange(state: AppStateStatus): void {
     return;
   }
 
-  void supabase.auth.startAutoRefresh();
+  if (decision.kind === "active") {
+    void supabase.auth.startAutoRefresh();
+  }
 }
 
 if (canUseNativeStorage) {
