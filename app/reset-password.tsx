@@ -1,16 +1,17 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
 import { KeyboardFormScroll, requestKeyboardScroll } from "@/components/KeyboardForm";
 import { useAuth } from "@/context/AuthContext";
+import { retryLastAuthDeepLink } from "@/lib/authDeepLink";
 import {
   PASSWORD_HINT,
   validatePasswordStrength,
 } from "@/lib/passwordPolicy";
-import { supabase, toErrorMessage } from "@/lib/supabase";
+import { isConnectionDroppedError, supabase, toErrorMessage } from "@/lib/supabase";
 import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
 
 type Status = "checking" | "ready" | "done" | "invalid";
@@ -25,10 +26,13 @@ export default function ResetPasswordScreen() {
     isAuthenticated,
     isLoading,
     isPasswordRecovery,
+    beginPasswordRecovery,
     clearPasswordRecovery,
     signOut,
   } = useAuth();
   const params = useLocalSearchParams<{ error?: string }>();
+  /** A retry must not be overwritten by the error still sitting on the route. */
+  const dismissedRouteError = useRef(false);
 
   const [status, setStatus] = useState<Status>("checking");
   const [password, setPassword] = useState("");
@@ -39,9 +43,15 @@ export default function ResetPasswordScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (typeof params.error === "string" && params.error) {
+    const routeError =
+      !dismissedRouteError.current &&
+      typeof params.error === "string" &&
+      params.error
+        ? params.error
+        : null;
+    if (routeError) {
       setStatus("invalid");
-      setError(params.error);
+      setError(routeError);
       return;
     }
 
@@ -131,6 +141,26 @@ export default function ResetPasswordScreen() {
     clearPasswordRecovery();
   }, [clearPasswordRecovery]);
 
+  const handleRetry = useCallback(async () => {
+    dismissedRouteError.current = true;
+    setStatus("checking");
+    setError(null);
+    router.setParams({ error: "" });
+
+    const result = await retryLastAuthDeepLink();
+    if (result.error || !result.handled) {
+      setStatus("invalid");
+      setError(
+        result.error ?? "This reset link is invalid or has expired.",
+      );
+      return;
+    }
+
+    if (result.isRecovery || result.type === "recovery") {
+      beginPasswordRecovery();
+    }
+  }, [beginPasswordRecovery, router]);
+
   const handleBackToSignIn = useCallback(async () => {
     if (isAuthenticated) {
       await signOut();
@@ -162,6 +192,9 @@ export default function ResetPasswordScreen() {
         {status === "invalid" ? (
           <>
             <Text style={styles.error}>{error}</Text>
+            {error && isConnectionDroppedError(new Error(error)) ? (
+              <Button label="Try again" onPress={() => void handleRetry()} />
+            ) : null}
             <Button label="Back to sign in" onPress={() => void handleBackToSignIn()} />
           </>
         ) : null}
