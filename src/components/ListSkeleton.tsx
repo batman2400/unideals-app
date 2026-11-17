@@ -1,6 +1,8 @@
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Dimensions, ScrollView, StyleSheet, View } from "react-native";
 
-import { colors, radius, spacing } from "@/theme";
+import { colors, mediaAspectRatio, radius, spacing } from "@/theme";
+
+const CAROUSEL_CARD_WIDTH = Math.round(Dimensions.get("window").width * 0.88);
 
 interface ListSkeletonProps {
   variant?: "list" | "carousel";
@@ -10,7 +12,7 @@ interface ListSkeletonProps {
 function SkeletonCard({ compact }: { compact?: boolean }) {
   return (
     <View style={[styles.card, compact && styles.cardCompact]}>
-      <View style={[styles.image, compact && styles.imageCompact]} />
+      <View style={styles.image} />
       <View style={styles.body}>
         <View style={[styles.line, styles.lineShort]} />
         <View style={styles.line} />
@@ -61,14 +63,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   cardCompact: {
-    width: 220,
+    width: CAROUSEL_CARD_WIDTH,
   },
   image: {
-    height: 150,
+    width: "100%",
+    aspectRatio: mediaAspectRatio,
     backgroundColor: colors.surfaceContainer,
-  },
-  imageCompact: {
-    height: 180,
   },
   body: {
     padding: spacing.lg,

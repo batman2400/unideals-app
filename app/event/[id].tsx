@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import * as Linking from "expo-linking";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { Calendar, Globe, Users } from "lucide-react-native";
 import type { ReactNode } from "react";
 import {
@@ -22,7 +22,7 @@ import {
 import { asHttpUrl } from "@/lib/httpUrl";
 import { asRouteId } from "@/lib/routeParams";
 import { useEvent } from "@/lib/useEvents";
-import { colors, radius, spacing } from "@/theme";
+import { colors, mediaAspectRatio, radius, spacing } from "@/theme";
 
 function audienceLabel(value: string | null): string {
   switch (value) {
@@ -67,9 +67,7 @@ export default function EventDetailScreen() {
   const registrationUrl = asHttpUrl(event.externalRegistrationUrl);
 
   return (
-    <>
-      <Stack.Screen options={{ title: event.title }} />
-      <ScrollView
+    <ScrollView
         style={styles.root}
         contentContainerStyle={{
           paddingBottom: insets.bottom + spacing.xxl,
@@ -164,8 +162,7 @@ export default function EventDetailScreen() {
             </View>
           )}
         </View>
-      </ScrollView>
-    </>
+    </ScrollView>
   );
 }
 
@@ -204,7 +201,7 @@ const styles = StyleSheet.create({
   },
   cover: {
     width: "100%",
-    height: 220,
+    aspectRatio: mediaAspectRatio,
     backgroundColor: colors.surfaceContainer,
   },
   coverFallback: {

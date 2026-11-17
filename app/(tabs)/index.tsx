@@ -1,4 +1,3 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
 import { Bookmark } from "lucide-react-native";
 import { useMemo, useRef, type ReactNode } from "react";
@@ -17,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/Button";
 import { SaveDealButton } from "@/components/DealCard";
-import { PerkCard } from "@/components/PerkCard";
+import { PERK_CARD_WIDTH, PerkCard } from "@/components/PerkCard";
 import { BrandExploreField } from "@/components/BrandExploreField";
 import { useKeyboardScroll } from "@/components/KeyboardForm";
 import { ListSkeleton } from "@/components/ListSkeleton";
@@ -34,12 +33,15 @@ import { useEvents } from "@/lib/useEvents";
 import { useStudentPerks } from "@/lib/useStudentPerks";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { dealPath, eventPath, perkPath } from "@/lib/routeParams";
+import { isRedundantDealCopy } from "@/lib/dealForm";
 import { floatingTabBarScrollPadding } from "@/lib/tabBar";
-import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
+import { MIN_TAP_TARGET, colors, mediaAspectRatio, radius, spacing } from "@/theme";
 import type { CampusEvent, Deal } from "@/types/database";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const HERO_CARD_WIDTH = SCREEN_WIDTH * 0.62;
+const HERO_CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.88);
+const HERO_SNAP_INTERVAL = HERO_CARD_WIDTH + spacing.md;
+const PERK_SNAP_INTERVAL = PERK_CARD_WIDTH + spacing.md;
 const CARD_RADIUS = 16;
 
 export default function HomeScreen() {
@@ -175,40 +177,6 @@ export default function HomeScreen() {
         <Text style={styles.emptyInline}>No live deals available yet.</Text>
       ) : null}
 
-      {perksLoading || perks.length > 0 || perksError ? (
-        <>
-          <SectionHeader
-            title="Global student perks"
-            actionLabel="View all"
-            onAction={() =>
-              router.push({
-                pathname: "/deals",
-                params: { catalogue: "perks" },
-              } as Href)
-            }
-          />
-          {perksError ? (
-            <View style={styles.errorBlock}>
-              <Text style={styles.errorText}>{perksError}</Text>
-              <Button label="Retry" onPress={() => void refreshPerks()} />
-            </View>
-          ) : perksLoading ? (
-            <ListSkeleton variant="carousel" count={3} />
-          ) : (
-            <HeroCarousel>
-              {perks.map((perk) => (
-                <PerkCard
-                  key={perk.id}
-                  perk={perk}
-                  variant="carousel"
-                  onPress={() => router.push(perkPath(perk.id))}
-                />
-              ))}
-            </HeroCarousel>
-          )}
-        </>
-      ) : null}
-
       {eventsError ? (
         <View style={styles.errorBlock}>
           <Text style={styles.errorText}>{eventsError}</Text>
@@ -238,9 +206,47 @@ export default function HomeScreen() {
         <Text style={styles.emptyInline}>No upcoming events right now.</Text>
       ) : null}
 
+      {perksLoading || perks.length > 0 || perksError ? (
+        <>
+          <SectionHeader
+            title="Global student perks"
+            actionLabel="View all"
+            onAction={() =>
+              router.push({
+                pathname: "/deals",
+                params: { catalogue: "perks" },
+              } as Href)
+            }
+          />
+          {perksError ? (
+            <View style={styles.errorBlock}>
+              <Text style={styles.errorText}>{perksError}</Text>
+              <Button label="Retry" onPress={() => void refreshPerks()} />
+            </View>
+          ) : perksLoading ? (
+            <ListSkeleton variant="carousel" count={3} />
+          ) : (
+            <PerkCarousel>
+              {perks.map((perk) => (
+                <PerkCard
+                  key={perk.id}
+                  perk={perk}
+                  variant="carousel"
+                  onPress={() => router.push(perkPath(perk.id))}
+                />
+              ))}
+            </PerkCarousel>
+          )}
+        </>
+      ) : null}
+
       <SectionHeader
         title="Coming Soon Deals"
-        actionLabel="View all"
+        actionLabel={
+          !dealsLoading && comingSoonDealsPreview.length === 0
+            ? undefined
+            : "View all"
+        }
         onAction={() =>
           router.push({
             pathname: "/deals",
@@ -273,6 +279,22 @@ export default function HomeScreen() {
   );
 }
 
+function PerkCarousel({ children }: { children: ReactNode }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.perkList}
+      nestedScrollEnabled
+      decelerationRate="fast"
+      snapToInterval={PERK_SNAP_INTERVAL}
+      snapToAlignment="start"
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
 function HeroCarousel({ children }: { children: ReactNode }) {
   return (
     <ScrollView
@@ -280,6 +302,9 @@ function HeroCarousel({ children }: { children: ReactNode }) {
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.heroList}
       nestedScrollEnabled
+      decelerationRate="fast"
+      snapToInterval={HERO_SNAP_INTERVAL}
+      snapToAlignment="start"
     >
       {children}
     </ScrollView>
@@ -292,15 +317,17 @@ function SectionHeader({
   onAction,
 }: {
   title: string;
-  actionLabel: string;
-  onAction: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
 }) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <Pressable onPress={onAction} hitSlop={8}>
-        <Text style={styles.sectionAction}>{actionLabel}</Text>
-      </Pressable>
+      {actionLabel && onAction ? (
+        <Pressable onPress={onAction} hitSlop={8}>
+          <Text style={styles.sectionAction}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -334,7 +361,6 @@ function HeroDealCard({
       <ImageBackground
         source={deal.imageUrl ? { uri: deal.imageUrl } : undefined}
         style={styles.heroImage}
-        imageStyle={styles.heroImageInner}
       >
         {!deal.imageUrl ? (
           <View style={styles.heroFallback}>
@@ -367,23 +393,23 @@ function HeroDealCard({
             />
           </View>
         ) : null}
-        <LinearGradient
-          colors={["transparent", "rgba(0,0,0,0.85)"]}
-          style={styles.heroGradient}
-          pointerEvents="none"
-        />
-        <View style={styles.heroTextWrap}>
-          <Text style={styles.heroBrand} numberOfLines={1}>
-            {deal.brand.toUpperCase()}
-          </Text>
-          <Text style={styles.heroTitle} numberOfLines={2}>
-            {deal.discount}
-          </Text>
+      </ImageBackground>
+      <View style={styles.heroFooter}>
+        <Text style={styles.heroBrand} numberOfLines={1}>
+          {deal.brand}
+        </Text>
+        <Text style={styles.heroTitle} numberOfLines={1}>
+          {deal.discount}
+        </Text>
+        {isRedundantDealCopy(
+          comingSoon ? launchLabel : deal.title,
+          deal.discount,
+        ) ? null : (
           <Text style={styles.heroSubtitle} numberOfLines={1}>
             {comingSoon ? launchLabel : deal.title}
           </Text>
-        </View>
-      </ImageBackground>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -395,10 +421,7 @@ function HeroEventCard({
   event: CampusEvent;
   onPress: () => void;
 }) {
-  const eyebrow =
-    event.universityName?.trim() ||
-    event.category?.replace(/_/g, " ") ||
-    "Campus event";
+  const eyebrow = event.category?.replace(/_/g, " ") || "Campus event";
 
   return (
     <Pressable
@@ -412,7 +435,6 @@ function HeroEventCard({
           event.coverImageUrl ? { uri: event.coverImageUrl } : undefined
         }
         style={styles.heroImage}
-        imageStyle={styles.heroImageInner}
       >
         {!event.coverImageUrl ? (
           <View style={styles.heroFallback}>
@@ -426,23 +448,18 @@ function HeroEventCard({
             <Text style={styles.floatingBadgeText}>EVENT</Text>
           </View>
         </View>
-        <LinearGradient
-          colors={["transparent", "rgba(0,0,0,0.85)"]}
-          style={styles.heroGradient}
-          pointerEvents="none"
-        />
-        <View style={styles.heroTextWrap}>
-          <Text style={styles.heroBrand} numberOfLines={1}>
-            {eyebrow.toUpperCase()}
-          </Text>
-          <Text style={styles.heroTitle} numberOfLines={2}>
-            {event.title}
-          </Text>
-          <Text style={styles.heroSubtitle} numberOfLines={1}>
-            {formatEventWhen(event)}
-          </Text>
-        </View>
       </ImageBackground>
+      <View style={styles.heroFooter}>
+        <Text style={styles.heroBrand} numberOfLines={1}>
+          {eyebrow}
+        </Text>
+        <Text style={styles.heroTitle} numberOfLines={1}>
+          {event.title}
+        </Text>
+        <Text style={styles.heroSubtitle} numberOfLines={1}>
+          {formatEventWhen(event)}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -520,21 +537,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
+  perkList: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    alignItems: "stretch",
+  },
   heroCard: {
     width: HERO_CARD_WIDTH,
+    borderRadius: CARD_RADIUS,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: colors.surfaceVariant,
   },
   pressed: {
     opacity: 0.9,
   },
   heroImage: {
     width: "100%",
-    aspectRatio: 4 / 5,
-    borderRadius: CARD_RADIUS,
+    aspectRatio: mediaAspectRatio,
     overflow: "hidden",
     backgroundColor: colors.surfaceContainer,
-  },
-  heroImageInner: {
-    borderRadius: CARD_RADIUS,
   },
   heroFallback: {
     ...StyleSheet.absoluteFill,
@@ -548,13 +571,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.onPrimaryContainer,
     textAlign: "center",
-  },
-  heroGradient: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "55%",
   },
   heroTopLeft: {
     position: "absolute",
@@ -583,29 +599,28 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.white,
   },
-  heroTextWrap: {
-    position: "absolute",
-    left: spacing.md,
-    right: spacing.md,
-    bottom: spacing.md,
+  heroFooter: {
+    padding: spacing.md,
     gap: 2,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   heroBrand: {
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.6,
-    color: "rgba(255,255,255,0.85)",
+    textTransform: "uppercase",
+    color: colors.onSurfaceVariant,
   },
   heroTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "800",
-    letterSpacing: -0.4,
-    color: colors.white,
+    letterSpacing: -0.3,
+    color: colors.onBackground,
   },
   heroSubtitle: {
     fontSize: 13,
     fontWeight: "600",
-    color: "rgba(255,255,255,0.85)",
+    color: colors.onSurfaceVariant,
   },
   emptyInline: {
     paddingHorizontal: spacing.lg,

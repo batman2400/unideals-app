@@ -456,6 +456,7 @@ export default function CreateEventScreen() {
           label="Cover Image"
           value={image}
           onChange={setImage}
+          aspect={[16, 9]}
         />
 
         <FormField

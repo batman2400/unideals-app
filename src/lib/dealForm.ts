@@ -232,3 +232,24 @@ export function splitDateTime(iso: string | null | undefined): {
   const min = String(value.getMinutes()).padStart(2, "0");
   return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
 }
+
+const TRAILING_STUDENT_OFFER = /(?:\s*[,.:;\-–—]?\s*)?student offer[.!?]*\s*$/i;
+
+/** Compare deal lines after trimming a trailing "student offer." suffix. */
+export function normalizeDealCopy(value: string | null | undefined): string {
+  return (value ?? "")
+    .replace(TRAILING_STUDENT_OFFER, "")
+    .replace(/[\s.,;:!?…\-–—]+$/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+/** True when a subtitle or description repeats the title or discount. */
+export function isRedundantDealCopy(
+  value: string | null | undefined,
+  ...against: Array<string | null | undefined>
+): boolean {
+  const normalized = normalizeDealCopy(value);
+  if (!normalized) return true;
+  return against.some((item) => normalizeDealCopy(item) === normalized);
+}

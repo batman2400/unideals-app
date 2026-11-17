@@ -22,7 +22,7 @@ import {
   type PartnerDealLifecycle,
 } from "@/lib/usePartnerDeals";
 import { usePartnerBrand } from "@/lib/usePartnerBrand";
-import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
+import { MIN_TAP_TARGET, colors, mediaAspectRatio, radius, spacing } from "@/theme";
 import type { PartnerDeal } from "@/types/database";
 
 type FilterValue = "all" | "active" | "scheduled" | "pending";
@@ -406,7 +406,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   imageWrap: {
-    height: 160,
+    width: "100%",
+    aspectRatio: mediaAspectRatio,
     backgroundColor: colors.surfaceContainerLow,
   },
   image: {

@@ -8,7 +8,8 @@ import {
   isComingSoonDeal,
   isExpiredDeal,
 } from "@/lib/eventTiming";
-import { MIN_TAP_TARGET, colors, radius, spacing } from "@/theme";
+import { isRedundantDealCopy } from "@/lib/dealForm";
+import { MIN_TAP_TARGET, colors, mediaAspectRatio, radius, spacing } from "@/theme";
 import type { Deal } from "@/types/database";
 
 interface DealCardProps {
@@ -164,7 +165,7 @@ export function DealCard({
         ) : scheduleLabel ? (
           <Text style={styles.scheduleLabel}>{scheduleLabel}</Text>
         ) : null}
-        {deal.description ? (
+        {!isRedundantDealCopy(deal.description, deal.title, deal.discount) ? (
           <Text style={styles.description} numberOfLines={2}>
             {deal.description}
           </Text>
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: "100%",
-    height: 150,
+    aspectRatio: mediaAspectRatio,
     backgroundColor: colors.surfaceContainer,
   },
   imageFallback: {

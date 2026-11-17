@@ -100,7 +100,7 @@ export default function PerkDetailScreen() {
 
       <Text style={styles.disclaimer}>{perkDisclaimer(perk.providerName)}</Text>
       <Text style={styles.body}>
-        Uni Deals does not check your eligibility or issue this offer. The
+        UniDeals does not check your eligibility or issue this offer. The
         provider's site and terms apply.
       </Text>
 

@@ -9,6 +9,8 @@ import {
 } from "@/lib/studentPerks";
 import { colors, radius, spacing } from "@/theme";
 
+export const PERK_CARD_WIDTH = 260;
+
 interface PerkCardProps {
   perk: StudentPerk;
   onPress: () => void;
@@ -26,7 +28,11 @@ export function PerkCard({ perk, onPress, variant = "row" }: PerkCardProps) {
         accessibilityRole="button"
         accessibilityLabel={perk.providerName}
         onPress={onPress}
-        style={({ pressed }) => [styles.body, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.body,
+          carousel && styles.carouselBody,
+          pressed && styles.pressed,
+        ]}
       >
       <View style={styles.top}>
         <PerkLogo providerName={perk.providerName} logoUrl={perk.logoUrl} />
@@ -39,14 +45,18 @@ export function PerkCard({ perk, onPress, variant = "row" }: PerkCardProps) {
           ) : null}
         </View>
       </View>
-      <Text style={styles.summary} numberOfLines={carousel ? 3 : 4}>
+      <Text style={styles.summary} numberOfLines={carousel ? 2 : 4}>
         {perk.summary}
       </Text>
       {perk.availability ? (
         <Text style={styles.meta}>{perk.availability}</Text>
       ) : null}
-      {verified ? <Text style={styles.meta}>Last verified on {verified}</Text> : null}
-      <Text style={styles.disclaimer}>{perkDisclaimer(perk.providerName)}</Text>
+      {!carousel && verified ? (
+        <Text style={styles.meta}>Last verified on {verified}</Text>
+      ) : null}
+      {!carousel ? (
+        <Text style={styles.disclaimer}>{perkDisclaimer(perk.providerName)}</Text>
+      ) : null}
       </Pressable>
       {offerUrl ? (
         <Pressable
@@ -55,12 +65,18 @@ export function PerkCard({ perk, onPress, variant = "row" }: PerkCardProps) {
           onPress={() => {
             void Linking.openURL(offerUrl);
           }}
-          style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.linkButton,
+            carousel && styles.carouselLink,
+            pressed && styles.pressed,
+          ]}
         >
           <Text style={styles.linkLabel}>Get this perk</Text>
-          <Text style={styles.linkUrl} numberOfLines={1}>
-            {offerUrl}
-          </Text>
+          {!carousel ? (
+            <Text style={styles.linkUrl} numberOfLines={1}>
+              {offerUrl}
+            </Text>
+          ) : null}
         </Pressable>
       ) : null}
     </View>
@@ -77,10 +93,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceContainerLowest,
   },
   carousel: {
-    width: 260,
+    width: PERK_CARD_WIDTH,
+    justifyContent: "space-between",
+    alignSelf: "stretch",
   },
   body: {
     gap: spacing.sm,
+  },
+  carouselBody: {
+    flexGrow: 1,
   },
   pressed: {
     opacity: 0.85,
@@ -122,6 +143,9 @@ const styles = StyleSheet.create({
   linkButton: {
     gap: 2,
     paddingVertical: spacing.xs,
+  },
+  carouselLink: {
+    marginTop: "auto",
   },
   linkLabel: {
     fontSize: 14,

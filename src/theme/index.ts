@@ -114,3 +114,6 @@ export const typography = {
 
 /** Minimum tap target enforced across the web app's interactive elements. */
 export const MIN_TAP_TARGET = 44;
+
+/** Deal and event cover photos. Partners crop uploads to this ratio. */
+export const mediaAspectRatio = 16 / 9;

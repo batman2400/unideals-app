@@ -580,6 +580,7 @@ export default function EditDealScreen() {
           value={image}
           previewUrl={imageUrl || null}
           onChange={setImage}
+          aspect={[16, 9]}
           hint="Optional: upload a new JPG, PNG, or WEBP (max 5MB)."
         />
 

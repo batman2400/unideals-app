@@ -438,7 +438,12 @@ export default function CreateDealScreen() {
         />
 
         <Text style={styles.section}>4. Deal image</Text>
-        <ImagePickerField label="Cover Image" value={image} onChange={setImage} />
+        <ImagePickerField
+          label="Cover Image"
+          value={image}
+          onChange={setImage}
+          aspect={[16, 9]}
+        />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 

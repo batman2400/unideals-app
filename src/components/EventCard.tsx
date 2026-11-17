@@ -7,7 +7,7 @@ import {
   formatLaunchRelative,
   isComingSoonEvent,
 } from "@/lib/eventTiming";
-import { colors, radius, spacing } from "@/theme";
+import { colors, mediaAspectRatio, radius, spacing } from "@/theme";
 import type { CampusEvent } from "@/types/database";
 
 interface EventCardProps {
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: "100%",
-    height: 150,
+    aspectRatio: mediaAspectRatio,
     backgroundColor: colors.surfaceContainer,
   },
   imageFallback: {

@@ -331,6 +331,7 @@ export default function AdminBrandsScreen() {
               value={logo}
               previewUrl={editing?.logoUrl}
               onChange={setLogo}
+              aspect={[1, 1]}
             />
             <View style={styles.modalActions}>
               <Button

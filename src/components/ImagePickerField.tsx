@@ -12,7 +12,7 @@ import {
 } from "react-native";
 
 import { compressImage } from "@/lib/compressImage";
-import { colors, radius, spacing } from "@/theme";
+import { colors, mediaAspectRatio, radius, spacing } from "@/theme";
 
 const DEFAULT_ASPECT: [number, number] = [16, 9];
 
@@ -47,6 +47,7 @@ export function ImagePickerField({
 }: ImagePickerFieldProps) {
   const displayUri = value?.uri ?? previewUrl ?? null;
   const isCircle = shape === "circle";
+  const isCoverFrame = !isCircle && aspect[0] === 16 && aspect[1] === 9;
   const [preparing, setPreparing] = useState(false);
 
   const pick = useCallback(async () => {
@@ -110,9 +111,11 @@ export function ImagePickerField({
         onPress={() => void pick()}
         style={({ pressed }) => [
           styles.frame,
-          { height: frameHeight },
+          isCoverFrame
+            ? { width: "100%", aspectRatio: mediaAspectRatio }
+            : { height: frameHeight },
           isCircle && styles.frameCircle,
-          isCircle && { width: frameHeight },
+          isCircle && { width: frameHeight, height: frameHeight },
           pressed && styles.pressed,
         ]}
       >
@@ -152,7 +155,6 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
   },
   frame: {
-    height: 160,
     borderRadius: radius.xl,
     borderWidth: 1,
     borderStyle: "dashed",

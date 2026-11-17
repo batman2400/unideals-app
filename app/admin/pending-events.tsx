@@ -19,7 +19,7 @@ import { Button } from "@/components/Button";
 import { useKeyboardInset } from "@/components/KeyboardForm";
 import { formatPlace } from "@/lib/maps";
 import { useAdminPendingEvents } from "@/lib/useAdmin";
-import { colors, radius, spacing } from "@/theme";
+import { colors, mediaAspectRatio, radius, spacing } from "@/theme";
 import type { CampusEvent } from "@/types/database";
 
 function formatWhen(iso: string | null | undefined): string {
@@ -446,7 +446,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   cover: {
-    height: 160,
+    width: "100%",
+    aspectRatio: mediaAspectRatio,
     backgroundColor: colors.surfaceContainerLow,
   },
   coverImage: {

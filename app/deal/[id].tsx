@@ -34,13 +34,14 @@ import {
 import { asHttpUrl } from "@/lib/httpUrl";
 import { asRouteId } from "@/lib/routeParams";
 import { brandHubPath } from "@/lib/brandPath";
+import { isRedundantDealCopy } from "@/lib/dealForm";
 import { supabase, toErrorMessage } from "@/lib/supabase";
 import { useDeal } from "@/lib/useDeals";
 import { usePartnerBrand } from "@/lib/usePartnerBrand";
 import { useSavedDeals } from "@/lib/useSavedDeals";
 import { useStudentVerificationRequest } from "@/lib/useVerificationRequest";
 import { REQUEST_TIMEOUT_MS, withTimeout } from "@/lib/withTimeout";
-import { colors, radius, spacing } from "@/theme";
+import { colors, mediaAspectRatio, radius, spacing } from "@/theme";
 import {
   TICKET_URI_PREFIX,
   type InstoreTicketRow,
@@ -159,7 +160,7 @@ export default function DealDetailScreen() {
             <Text style={styles.chipMuted}>{deal.category}</Text>
           ) : null}
         </View>
-        {deal.description ? (
+        {!isRedundantDealCopy(deal.description, deal.title, deal.discount) ? (
           <Text style={styles.description}>{deal.description}</Text>
         ) : null}
         {scheduleLabel ? (
@@ -659,7 +660,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     width: "100%",
-    height: 220,
+    aspectRatio: mediaAspectRatio,
     backgroundColor: colors.surfaceContainer,
   },
   heroSave: {
